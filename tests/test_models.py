@@ -1,8 +1,19 @@
 import pytest
 
-from jrvoiceapp.models import SAMPLE_RECENT_CALLS, AccountConfig, ConnectionKind, WebRtcEngine
+from jrvoiceapp.models import (
+    SAMPLE_RECENT_CALLS,
+    AccountConfig,
+    ConnectionKind,
+    SignalingTemplates,
+    WebRtcEngine,
+)
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
+from jrvoiceapp.telephony.sipapp_core.sip_engine import (
+    DEFAULT_INVITE_TEMPLATE,
+    SIPEngine,
+    SIPMessage,
+)
 from jrvoiceapp.telephony.webrtc import WebRtcProvider
 
 
@@ -56,3 +67,39 @@ def test_sipapp_provider_never_puts_password_in_events() -> None:
     provider.add_event_callback(lambda event, details: events.append((event, details)))
     provider._on_call_state("DIALING", {"password": "do-not-expose", "target": "1002"})
     assert events == [("call-state", {"state": "DIALING", "target": "1002"})]
+
+
+def test_sipapp_template_renders_custom_header_variables() -> None:
+    template = DEFAULT_INVITE_TEMPLATE.replace(
+        "Max-Forwards: 70", "Max-Forwards: 70\n{custom_headers}X-Correlation: {trace_id}"
+    )
+    engine = SIPEngine(invite_template=template, header_variables={"trace_id": "abc-123"})
+    packet, _ = engine.build_invite(
+        "sip:1002@example.test", {"username": "1001", "domain": "example.test"}
+    )
+    assert "X-trace-id: abc-123" in packet
+    assert "X-Correlation: abc-123" in packet
+
+
+def test_signal_header_variable_names_and_values_are_safe() -> None:
+    with pytest.raises(ValueError, match="variable names"):
+        SignalingTemplates(header_variables={"not valid": "value"}).validate()
+    with pytest.raises(ValueError, match="line breaks"):
+        SignalingTemplates(header_variables={"trace_id": "value\r\nInjected: bad"}).validate()
+
+
+def test_sipapp_200_ok_template_renders_header_variables() -> None:
+    engine = SIPEngine(
+        response_template="SIP/2.0 {status_code} {reason}\n{via_headers}From: {from_header}\n"
+        "To: {to_header}\nCall-ID: {call_id}\nCSeq: {cseq_header}\n"
+        "X-Correlation: {trace_id}\n{custom_headers}{content_headers}\n\n{sdp_body}",
+        header_variables={"trace_id": "abc-123"},
+    )
+    request = SIPMessage(
+        "INVITE sip:1001@example.test SIP/2.0\r\nVia: SIP/2.0/TLS peer;branch=one\r\n"
+        "From: <sip:1002@example.test>;tag=peer\r\nTo: <sip:1001@example.test>\r\n"
+        "Call-ID: test-call\r\nCSeq: 1 INVITE\r\nContent-Length: 0\r\n\r\n"
+    )
+    response = engine._build_response(request, 200, "OK", "v=0\r\n")
+    assert "X-Correlation: abc-123" in response
+    assert "X-trace-id: abc-123" in response

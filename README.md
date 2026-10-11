@@ -34,6 +34,8 @@ On Windows, activate the virtual environment with `.venv\\Scripts\\activate` bef
 - Native-looking desktop behavior on Windows, macOS, and Linux
 - A background/tray mode and actionable incoming-call notification
 - Secure account credentials through each operating system's keychain
+- Per-account editable SIP and WebRTC `INVITE` and inbound `200 OK` templates
+- Reusable non-secret SIP custom-header variables for provider-specific `X-` headers
 
 See [the roadmap](docs/ROADMAP.md), [architecture notes](docs/ARCHITECTURE.md), and the editable [project status checklist](PROJECT_STATUS.md) for the planned implementation boundaries.
 

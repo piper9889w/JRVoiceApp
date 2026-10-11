@@ -9,7 +9,7 @@ from pathlib import Path
 import keyring
 from PySide6.QtCore import QStandardPaths
 
-from jrvoiceapp.models import AccountConfig, ConnectionKind, WebRtcEngine
+from jrvoiceapp.models import AccountConfig, ConnectionKind, SignalingTemplates, WebRtcEngine
 
 KEYRING_SERVICE = "JRVoiceApp"
 
@@ -36,6 +36,7 @@ class AccountStore:
                 connection_kind=ConnectionKind(item["connection_kind"]),
                 web_rtc_engine=WebRtcEngine(item.get("web_rtc_engine", WebRtcEngine.SIPJS)),
                 voicemail_number=item.get("voicemail_number", "*97"),
+                signaling=SignalingTemplates(**item.get("signaling", {})),
             )
             for item in raw
         ]

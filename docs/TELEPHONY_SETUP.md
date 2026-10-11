@@ -26,6 +26,21 @@ Run live registration and inbound/outbound audio tests against the target PBX
 before treating any SIP feature as complete. The default TLS certificate and
 hostname verification must remain enabled in that testing.
 
+## Signaling templates and custom headers
+
+Each account has **Edit signaling templates…** in Account Settings. It stores
+non-secret templates for SIP and WebRTC outbound `INVITE` and inbound-answer
+`200 OK` messages. Blank templates use the safe engine default. Changes are
+saved with the account and apply to the next call; they do not alter a live
+dialog.
+
+Header variables are stored as `name = value`. Use `{name}` anywhere in a
+template, and use `{custom_headers}` to emit every defined value as an
+`X-name: value` SIP header. Values cannot contain newlines, preventing header
+injection. The WebRTC bridge receives the same settings for its future
+SIP.js/JsSIP implementation; it is configuration-ready but not live-runtime
+validated yet.
+
 ## WebRTC requirements
 
 WebRTC accounts use a valid `wss://` endpoint. SIP.js is the intended default and JsSIP is a selectable alternative. Both require an embedded Chromium runtime, microphone permission, a trusted TLS certificate, and ICE/TURN configuration appropriate for the user’s network.

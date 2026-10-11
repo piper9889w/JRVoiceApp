@@ -9,19 +9,23 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
 )
 
-from jrvoiceapp.models import AccountConfig, ConnectionKind, WebRtcEngine
+from jrvoiceapp.models import AccountConfig, ConnectionKind, SignalingTemplates, WebRtcEngine
+from jrvoiceapp.ui.signaling_dialog import SignalingDialog
 
 
 class AccountDialog(QDialog):
     def __init__(self, account: AccountConfig | None = None, parent=None) -> None:
         super().__init__(parent)
         self.account = account
+        self.signaling = account.signaling if account else None
         self.setWindowTitle("Add account" if account is None else "Edit account")
         self.setMinimumWidth(460)
         layout = QVBoxLayout(self)
@@ -57,6 +61,13 @@ class AccountDialog(QDialog):
         ):
             form.addRow(title, control)
         layout.addLayout(form)
+        signaling_row = QHBoxLayout()
+        signaling_row.addWidget(QLabel("Message and custom-header settings"))
+        signaling_button = QPushButton("Edit signaling templates…")
+        signaling_button.clicked.connect(self.open_signaling_dialog)
+        signaling_row.addWidget(signaling_button)
+        signaling_row.addStretch()
+        layout.addLayout(signaling_row)
         self.engine_select.setToolTip(
             "SIP.js is recommended. JsSIP is an alternate engine. aiortc is experimental."
         )
@@ -89,4 +100,10 @@ class AccountDialog(QDialog):
             connection_kind=ConnectionKind(self.kind_select.currentText()),
             web_rtc_engine=WebRtcEngine(self.engine_select.currentText()),
             voicemail_number=self.voicemail_input.text().strip() or "*97",
+            signaling=self.signaling or SignalingTemplates(),
         )
+
+    def open_signaling_dialog(self) -> None:
+        dialog = SignalingDialog(self.signaling or SignalingTemplates(), self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.signaling = dialog.result_templates()

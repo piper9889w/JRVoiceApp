@@ -11,6 +11,9 @@ class WebRtcBridgeConfig:
     engine: WebRtcEngine
     username: str
     websocket_url: str
+    invite_template: str
+    ok_template: str
+    header_variables: dict[str, str]
 
 
 class WebRtcProvider(TelephonyProvider):
@@ -19,7 +22,12 @@ class WebRtcProvider(TelephonyProvider):
         self.account = account
         self.password = password
         self.bridge_config = WebRtcBridgeConfig(
-            account.web_rtc_engine, account.username, account.server
+            account.web_rtc_engine,
+            account.username,
+            account.server,
+            account.signaling.webrtc_invite,
+            account.signaling.webrtc_ok,
+            dict(account.signaling.header_variables),
         )
 
     def start(self) -> None:

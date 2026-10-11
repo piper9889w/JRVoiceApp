@@ -25,6 +25,16 @@ Content-Length: {content_length}
 
 {sdp_body}"""
 
+DEFAULT_200_OK_TEMPLATE = """SIP/2.0 {status_code} {reason}
+{via_headers}From: {from_header}
+To: {to_header}
+Call-ID: {call_id}
+CSeq: {cseq_header}
+User-Agent: {user_agent}
+{custom_headers}{content_headers}
+
+{sdp_body}"""
+
 INVITE_TEMPLATE_REQUIRED_FIELDS = {
     "target_uri",
     "transport",
@@ -199,6 +209,8 @@ class SIPEngine:
         block_direct_ip_calls: bool = False,
         user_agent: str = USER_AGENT,
         invite_template: str = "",
+        response_template: str = "",
+        header_variables: Optional[Dict[str, str]] = None,
     ):
         self.local_port = local_port
         self.transport = "TLS" if use_tls else transport.upper()
@@ -207,6 +219,8 @@ class SIPEngine:
         self.block_direct_ip_calls = block_direct_ip_calls
         self.user_agent = user_agent
         self.invite_template = invite_template or DEFAULT_INVITE_TEMPLATE
+        self.response_template = response_template or DEFAULT_200_OK_TEMPLATE
+        self.header_variables = dict(header_variables or {})
 
         self.socket: Optional[socket.socket] = None
         self.running = False
@@ -1016,8 +1030,12 @@ class SIPEngine:
             "content_length": len(sdp_body.encode("utf-8")),
             "sdp_body": sdp_body.replace("\r\n", "\n"),
         }
+        context.update(self.header_variables)
+        context["custom_headers"] = self._custom_header_lines()
         template = self.invite_template or DEFAULT_INVITE_TEMPLATE
-        valid, error = self.validate_invite_template(template)
+        valid, error = self.validate_invite_template(
+            template, set(self.header_variables) | {"custom_headers"}
+        )
         if not valid:
             self.log_sys_event(
                 f"Invalid saved INVITE template; using default: {error}",
@@ -1038,12 +1056,16 @@ class SIPEngine:
         return packet, call_id
 
     @staticmethod
-    def validate_invite_template(template: str) -> Tuple[bool, str]:
-        errors = SIPEngine.inspect_invite_template(template)
+    def validate_invite_template(
+        template: str, allowed_fields: Optional[set[str]] = None
+    ) -> Tuple[bool, str]:
+        errors = SIPEngine.inspect_invite_template(template, allowed_fields)
         return (not errors, "; ".join(errors))
 
     @staticmethod
-    def inspect_invite_template(template: str) -> List[str]:
+    def inspect_invite_template(
+        template: str, allowed_fields: Optional[set[str]] = None
+    ) -> List[str]:
         """Return actionable structural errors for an editable INVITE template."""
         if not template.strip():
             return ["Template cannot be empty"]
@@ -1058,7 +1080,7 @@ class SIPEngine:
         ):
             return ["Placeholder conversions and format specifications are not supported"]
         fields = {field_name for _, field_name, _, _ in parsed if field_name}
-        unknown = fields - INVITE_TEMPLATE_REQUIRED_FIELDS
+        unknown = fields - INVITE_TEMPLATE_REQUIRED_FIELDS - (allowed_fields or set())
         missing = INVITE_TEMPLATE_REQUIRED_FIELDS - fields
         errors = []
         if unknown:
@@ -1085,6 +1107,7 @@ class SIPEngine:
             "sdp_body": "v=0\ns=Validation\n",
             "content_length": len("v=0\r\ns=Validation\r\n".encode("utf-8")),
         }
+        sample.update({field: "X-Validation: value\n" if field == "custom_headers" else "value" for field in (allowed_fields or set())})
         try:
             rendered = template.replace("\r\n", "\n").format_map(sample).replace("\n", "\r\n")
         except (KeyError, ValueError, TypeError) as exc:
@@ -1247,27 +1270,47 @@ class SIPEngine:
         call_id = req_msg.get_header("Call-ID")
         cseq_hdr = req_msg.get_header("CSeq")
 
-        headers = [
-            f"SIP/2.0 {status_code} {reason}",
-            *(f"Via: {via}" for via in via_headers),
-            f"From: {from_hdr}",
-            f"To: {to_hdr}",
-            f"Call-ID: {call_id}",
-            f"CSeq: {cseq_hdr}",
-            f"User-Agent: {self.user_agent}",
-        ]
+        content_headers = (
+            f"Content-Type: application/sdp\nContent-Length: {len(sdp_body.encode('utf-8'))}"
+            if sdp_body
+            else "Content-Length: 0"
+        )
+        context = {
+            "status_code": status_code,
+            "reason": reason,
+            "via_headers": "".join(f"Via: {via}\n" for via in via_headers),
+            "from_header": from_hdr,
+            "to_header": to_hdr,
+            "call_id": call_id,
+            "cseq_header": cseq_hdr,
+            "user_agent": self.user_agent,
+            "content_headers": content_headers,
+            "content_length": len(sdp_body.encode("utf-8")),
+            "sdp_body": sdp_body.replace("\r\n", "\n"),
+            "custom_headers": self._custom_header_lines(),
+        }
+        context.update(self.header_variables)
+        template = self.response_template if status_code == 200 else DEFAULT_200_OK_TEMPLATE
+        try:
+            return template.replace("\r\n", "\n").format_map(context).replace("\n", "\r\n")
+        except (KeyError, ValueError) as exc:
+            self.log_sys_event(
+                f"200 OK template rendering failed; using default: {exc}", category="DIAL", level="ERROR"
+            )
+            return DEFAULT_200_OK_TEMPLATE.format_map(context).replace("\n", "\r\n")
 
-        if sdp_body:
-            headers.append("Content-Type: application/sdp")
-            headers.append(f"Content-Length: {len(sdp_body.encode('utf-8'))}")
-        else:
-            headers.append("Content-Length: 0")
-
-        headers.append("\r\n")
-        res = "\r\n".join(headers)
-        if sdp_body:
-            res += sdp_body
-        return res
+    def _custom_header_lines(self) -> str:
+        """Return explicit unknown/X-headers without allowing line injection."""
+        headers = []
+        for name, value in self.header_variables.items():
+            if "\r" in name or "\n" in name or "\r" in value or "\n" in value:
+                continue
+            if ":" in name:
+                header_name = name
+            else:
+                header_name = f"X-{name.replace('_', '-') }"
+            headers.append(f"{header_name}: {value}\n")
+        return "".join(headers)
 
     def answer_incoming_call(
         self,

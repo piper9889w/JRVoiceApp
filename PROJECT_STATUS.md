@@ -1,6 +1,6 @@
 # JRVoiceApp project status
 
-Last updated: 2026-10-10
+Last updated: 2026-10-11
 
 This is the shared working checklist for the project. Update it in the same pull request or commit as the work it describes. Use `[x]` only for work that has been implemented and verified; use `[~]` for active work; use `[ ]` for planned work.
 
@@ -70,6 +70,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [ ] Combine SIP and WebRTC history, contacts, dialer, and presence.
 - [ ] Display account, codec, encryption, and call-quality status.
 - [ ] Define deterministic account-routing rules for outbound calls.
+- [~] Add per-account editable SIP/WebRTC INVITE and 200 OK templates plus reusable custom-header variables (SIPApp adapter applies SIP templates; WebRTC bridge configuration is ready pending runtime integration).
 
 ### 8. Provisioning integration
 

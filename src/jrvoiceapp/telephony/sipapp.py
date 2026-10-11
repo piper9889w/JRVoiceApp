@@ -52,7 +52,15 @@ class SipAppProvider(TelephonyProvider):
             self.state = ProviderState.ERROR
             raise RuntimeError("No SIP password is available in the operating-system keychain.")
         profile = self._profile()
-        self.engine = SIPEngine(local_port=0, transport="TLS", use_tls=True, tls_verify=True)
+        self.engine = SIPEngine(
+            local_port=0,
+            transport="TLS",
+            use_tls=True,
+            tls_verify=True,
+            invite_template=self.account.signaling.sip_invite,
+            response_template=self.account.signaling.sip_ok,
+            header_variables=self.account.signaling.header_variables,
+        )
         self.engine.add_log_callback(self._on_log)
         self.engine.add_call_callback(self._on_call_state)
         if not self.engine.start():
