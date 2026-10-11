@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -194,7 +195,9 @@ class MainWindow(QMainWindow):
         )
         self.call_button.clicked.connect(self.place_call)
         actions.addWidget(self.call_button)
-        actions.addWidget(QPushButton("◉  Devices"))
+        devices = QPushButton("◉  Devices")
+        devices.clicked.connect(self.configure_audio_devices)
+        actions.addWidget(devices)
         layout.addLayout(actions)
         return panel
 
@@ -263,9 +266,18 @@ class MainWindow(QMainWindow):
             if label.endswith("End call"):
                 button.setObjectName("end")
                 button.clicked.connect(self.end_call)
-            elif label.endswith(("Transfer", "Hold")):
-                button.setEnabled(False)
-                button.setToolTip("SIPApp 1.8 does not implement this signaling control yet.")
+            elif label.endswith("Mute"):
+                button.setCheckable(True)
+                button.clicked.connect(self.toggle_mute)
+            elif label.endswith("Keypad"):
+                button.clicked.connect(self.send_dtmf)
+            elif label.endswith("Speaker"):
+                button.clicked.connect(self.change_speaker_volume)
+            elif label.endswith("Transfer"):
+                button.clicked.connect(self.transfer_call)
+            elif label.endswith("Hold"):
+                button.setCheckable(True)
+                button.clicked.connect(self.toggle_hold)
             controls.addWidget(button, index // 3, index % 3)
         layout.addLayout(controls)
         return panel
@@ -326,6 +338,67 @@ class MainWindow(QMainWindow):
     def end_call(self) -> None:
         if self.provider and isinstance(self.provider, SipAppProvider):
             self.provider.hangup()
+
+    def toggle_mute(self, muted: bool) -> None:
+        if isinstance(self.provider, SipAppProvider):
+            self.provider.set_muted(muted)
+            self.statusBar().showMessage(
+                "Microphone muted." if muted else "Microphone unmuted.", 3000
+            )
+
+    def send_dtmf(self) -> None:
+        digit, accepted = QInputDialog.getText(self, "Send DTMF", "Digit (0–9, *, #, A–D):")
+        if accepted and digit:
+            try:
+                if isinstance(self.provider, SipAppProvider):
+                    self.provider.send_dtmf(digit.upper())
+            except (RuntimeError, ValueError) as error:
+                self.statusBar().showMessage(str(error), 6000)
+
+    def change_speaker_volume(self) -> None:
+        volume, accepted = QInputDialog.getInt(self, "Speaker volume", "Volume:", 80, 0, 100)
+        if accepted and isinstance(self.provider, SipAppProvider):
+            self.provider.set_speaker_volume(volume)
+
+    def toggle_hold(self, held: bool) -> None:
+        try:
+            if isinstance(self.provider, SipAppProvider):
+                self.provider.set_hold(held)
+        except RuntimeError as error:
+            self.statusBar().showMessage(str(error), 6000)
+
+    def transfer_call(self) -> None:
+        destination, accepted = QInputDialog.getText(self, "Transfer call", "Destination:")
+        if accepted and destination:
+            try:
+                if isinstance(self.provider, SipAppProvider):
+                    self.provider.transfer(destination)
+            except RuntimeError as error:
+                self.statusBar().showMessage(str(error), 6000)
+
+    def configure_audio_devices(self) -> None:
+        if not isinstance(self.provider, SipAppProvider):
+            self.statusBar().showMessage(
+                "Connect the SIP account before selecting call devices.", 5000
+            )
+            return
+        devices = self.provider.available_audio_devices()
+        inputs = devices["inputs"]
+        outputs = devices["outputs"]
+        input_device, accepted = QInputDialog.getItem(
+            self, "Microphone", "Input device:", inputs, editable=False
+        )
+        if not accepted:
+            return
+        output_device, accepted = QInputDialog.getItem(
+            self, "Speaker", "Output device:", outputs, editable=False
+        )
+        if accepted:
+            self.provider.audio.input_device = input_device
+            self.provider.audio.output_device = output_device
+            self.statusBar().showMessage(
+                "Call devices will be used on the next media connection.", 6000
+            )
 
     def _on_provider_event(self, event: str, details: dict[str, str]) -> None:
         if event == "registration":

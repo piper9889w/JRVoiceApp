@@ -113,3 +113,29 @@ def test_emergency_location_and_user_dial_string_limits() -> None:
     assert UserEmergencySettings("911, 112, 999").numbers() == {"911", "112", "999"}
     with pytest.raises(ValueError, match="five"):
         EmergencyConfig(locations=[str(index) for index in range(6)]).validate()
+
+
+def test_sipapp_builds_dtmf_hold_and_refer_requests() -> None:
+    engine = SIPEngine()
+    sent = []
+    engine.send_sip_message = lambda raw, *_args, **_kwargs: sent.append(raw) or True
+    engine.call_state = "CONNECTED"
+    engine.outbound_dialog = {
+        "contact": "<sip:peer@example.test>",
+        "from": "<sip:1001@example.test>;tag=local",
+        "to": "<sip:1002@example.test>;tag=remote",
+        "call_id": "test-call",
+        "cseq": 1,
+        "target_host": "example.test",
+        "target_port": 5061,
+        "transport": "TLS",
+    }
+    assert engine.send_dtmf("5")
+    assert "INFO sip:peer@example.test SIP/2.0" in sent[-1]
+    assert "Signal=5" in sent[-1]
+    assert engine.set_hold(True)
+    assert "UPDATE sip:peer@example.test SIP/2.0" in sent[-1]
+    assert "a=sendonly" in sent[-1]
+    assert engine.transfer_call("1003", "example.test")
+    assert "REFER sip:peer@example.test SIP/2.0" in sent[-1]
+    assert "Refer-To: <sip:1003@example.test>" in sent[-1]

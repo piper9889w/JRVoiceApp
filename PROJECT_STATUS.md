@@ -63,7 +63,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [x] Record the SIP implementation decision: continue from SIPApp source in this project.
 - [x] Bring the approved SIPApp source into JRVoiceApp and create the maintained integration boundary (source commit `8464088`; no upstream license declaration, recorded in provenance).
 - [~] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage (TLS registration/call adapter is implemented; target-PBX validation and TCP/UDP account selection remain).
-- [~] Add audio-device selection, DTMF, hold, transfer, and voicemail (SIPApp RTP/G.711 audio and voicemail dialing are integrated; the inherited code has no DTMF, SIP hold, or transfer implementation).
+- [~] Add audio-device selection, DTMF, hold, transfer, and voicemail (SIPApp RTP/G.711 audio and voicemail dialing are integrated; desktop controls now issue SIP INFO DTMF, UPDATE hold/resume, and REFER transfer, plus mute/speaker/device selection. All require target-PBX validation.)
 - [~] Add certificate validation and useful network error reporting (TLS verification and provider diagnostics are wired; real certificate/network scenarios remain to be tested).
 
 ### 7. Unified experience

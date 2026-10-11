@@ -113,6 +113,31 @@ class SipAppProvider(TelephonyProvider):
     def dial_voicemail(self) -> None:
         self.dial(self.account.voicemail_number)
 
+    def send_dtmf(self, digit: str) -> None:
+        if not self.engine or not self.engine.send_dtmf(digit):
+            raise RuntimeError("No connected SIP dialog is available for DTMF.")
+
+    def set_hold(self, held: bool) -> None:
+        if not self.engine or not self.engine.set_hold(held, self.audio.local_rtp_port or 10000):
+            raise RuntimeError("No connected SIP dialog is available for hold/resume.")
+
+    def transfer(self, destination: str) -> None:
+        if not self.engine or not self.engine.transfer_call(
+            destination, str(self._profile()["domain"])
+        ):
+            raise RuntimeError("No connected SIP dialog is available for transfer.")
+
+    def set_muted(self, muted: bool) -> None:
+        self.audio.set_muted(muted)
+        self._emit("media", muted=str(muted))
+
+    def set_speaker_volume(self, percent: int) -> None:
+        self.audio.set_speaker_volume(percent)
+        self._emit("media", speaker_volume=str(percent))
+
+    def available_audio_devices(self) -> dict[str, object]:
+        return self.audio.get_audio_devices()
+
     def set_emergency_location(self, location: str) -> None:
         """Keep a verified session location without writing it to diagnostics."""
         self.emergency_location = location

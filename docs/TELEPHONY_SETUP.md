@@ -26,6 +26,15 @@ Run live registration and inbound/outbound audio tests against the target PBX
 before treating any SIP feature as complete. The default TLS certificate and
 hostname verification must remain enabled in that testing.
 
+## Active SIP-call controls
+
+The active-line panel exposes mute, speaker volume, current-session device
+selection, SIP INFO DTMF, SIP UPDATE hold/resume, blind SIP REFER transfer,
+and hangup. Mute and speaker volume directly use the SIPApp audio engine;
+DTMF, hold, and transfer construct standards-oriented in-dialog messages.
+These controls are unit-tested for message construction only and must be
+validated against the target PBX before they are treated as interoperable.
+
 ## Signaling templates and custom headers
 
 Each account has **Edit signaling templates…** in Account Settings. It stores

@@ -1403,7 +1403,13 @@ class SIPEngine:
         return match.group(1) if match else fallback
 
     def _build_dialog_request(
-        self, method: str, dialog: Dict[str, Any], cseq: int, session_interval: int = 0
+        self,
+        method: str,
+        dialog: Dict[str, Any],
+        cseq: int,
+        session_interval: int = 0,
+        extra_headers: Optional[List[str]] = None,
+        body: str = "",
     ) -> str:
         request_uri = self._uri_from_header(dialog.get("contact", ""), dialog.get("target_uri", ""))
         source_ip = dialog.get("source_ip") or self.local_ip
@@ -1435,8 +1441,67 @@ class SIPEngine:
                     "Min-SE: 90",
                 ]
             )
-        headers.append("Content-Length: 0")
-        return "\r\n".join(headers) + "\r\n\r\n"
+        headers.extend(extra_headers or [])
+        headers.append(f"Content-Length: {len(body.encode('utf-8'))}")
+        return "\r\n".join(headers) + "\r\n\r\n" + body
+
+    def _active_connected_dialog(self) -> Dict[str, Any]:
+        if self.call_state not in ("CONNECTED", "HELD"):
+            return {}
+        return self.outbound_dialog or (
+            self.active_dialog if self.active_dialog.get("direction") == "incoming" else {}
+        )
+
+    def _send_dialog_request(
+        self, method: str, extra_headers: Optional[List[str]] = None, body: str = ""
+    ) -> bool:
+        dialog = self._active_connected_dialog()
+        if not dialog:
+            return False
+        dialog["cseq"] = int(dialog.get("cseq", 0)) + 1
+        request = self._build_dialog_request(
+            method, dialog, dialog["cseq"], extra_headers=extra_headers, body=body
+        )
+        return bool(
+            self.send_sip_message(
+                request,
+                dialog["target_host"],
+                dialog["target_port"],
+                outbound_proxy=dialog.get("outbound_proxy", ""),
+                transport=dialog.get("transport", "UDP"),
+                tls_verify=dialog.get("tls_verify", True),
+            )
+        )
+
+    def send_dtmf(self, digit: str) -> bool:
+        if digit not in "0123456789*#ABCD":
+            raise ValueError("DTMF must be one digit: 0-9, *, #, or A-D.")
+        body = f"Signal={digit}\r\nDuration=160\r\n"
+        sent = self._send_dialog_request("INFO", ["Content-Type: application/dtmf-relay"], body)
+        if sent:
+            self.log_sys_event(f"Sent DTMF {digit} using SIP INFO", category="DIAL")
+        return sent
+
+    def set_hold(self, held: bool, rtp_port: int = 10000) -> bool:
+        direction = "sendonly" if held else "sendrecv"
+        body = (
+            f"v=0\r\no=JRVoiceApp 1 1 IN IP4 {self.local_ip}\r\ns=SIP hold\r\n"
+            f"c=IN IP4 {self.local_ip}\r\nt=0 0\r\nm=audio {rtp_port} RTP/AVP 0 8 101\r\n"
+            "a=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\n"
+            "a=rtpmap:101 telephone-event/8000\r\n"
+            f"a={direction}\r\n"
+        )
+        sent = self._send_dialog_request("UPDATE", ["Content-Type: application/sdp"], body)
+        if sent:
+            self._notify_call_state("HELD" if held else "CONNECTED", {"held": held})
+        return sent
+
+    def transfer_call(self, destination: str, account_domain: str = "") -> bool:
+        target = self.normalize_dial_target(destination, account_domain)
+        sent = self._send_dialog_request("REFER", [f"Refer-To: <{target}>"])
+        if sent:
+            self.log_sys_event(f"Sent blind transfer REFER to {target}", category="DIAL")
+        return sent
 
     def cancel_outbound_call(self) -> bool:
         context = self.outbound_invite_context
