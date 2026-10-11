@@ -139,3 +139,14 @@ def test_sipapp_builds_dtmf_hold_and_refer_requests() -> None:
     assert engine.transfer_call("1003", "example.test")
     assert "REFER sip:peer@example.test SIP/2.0" in sent[-1]
     assert "Refer-To: <sip:1003@example.test>" in sent[-1]
+
+
+def test_sipapp_diagnostics_redacts_credentials() -> None:
+    account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
+    provider = SipAppProvider(account, "do-not-expose")
+    provider.engine = SIPEngine()
+    provider.engine.log_sys_event("Registration ready")
+    report = provider.diagnostics()
+    assert report["transport"] == "UDP"
+    assert "Registration ready" in report["events"][0]
+    assert "do-not-expose" not in str(report)

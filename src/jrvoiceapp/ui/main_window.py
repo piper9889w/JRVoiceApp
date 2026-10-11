@@ -24,6 +24,7 @@ from jrvoiceapp.models import SAMPLE_RECENT_CALLS
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.ui.account_dialog import AccountDialog
+from jrvoiceapp.ui.diagnostics_dialog import DiagnosticsDialog
 from jrvoiceapp.ui.emergency_dialog import EmergencyLocationDialog
 from jrvoiceapp.ui.incoming_call import IncomingCallDialog
 
@@ -119,6 +120,11 @@ class MainWindow(QMainWindow):
         settings.clicked.connect(self.open_account_dialog)
         settings.setAccessibleName("Account settings")
         layout.addWidget(settings)
+        diagnostics = QPushButton("⌁  Diagnostics")
+        diagnostics.setObjectName("nav")
+        diagnostics.clicked.connect(self.open_diagnostics)
+        diagnostics.setAccessibleName("Call diagnostics")
+        layout.addWidget(diagnostics)
         layout.addStretch()
 
         secure = QFrame()
@@ -307,6 +313,15 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Could not save account", str(error))
             return
         self._refresh_account_label()
+
+    def open_diagnostics(self) -> None:
+        if isinstance(self.provider, SipAppProvider):
+            dialog = DiagnosticsDialog(self.provider.diagnostics, self)
+        else:
+            dialog = DiagnosticsDialog(
+                lambda: {"provider_state": "No SIP provider is connected."}, self
+            )
+        dialog.exec()
 
     def _refresh_account_label(self) -> None:
         if self.accounts:

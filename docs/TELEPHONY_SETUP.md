@@ -35,6 +35,14 @@ DTMF, hold, and transfer construct standards-oriented in-dialog messages.
 These controls are unit-tested for message construction only and must be
 validated against the target PBX before they are treated as interoperable.
 
+## Desktop diagnostics
+
+The **Diagnostics** sidebar item exposes provider state, signaling transport,
+TLS-verification posture, codec, RTP endpoints, packet totals, jitter/loss,
+NAT state, audio errors, last network error, and recent SIP event summaries.
+It intentionally displays no password, SIP authorization data, raw message
+body, or SDES key material.
+
 ## Signaling templates and custom headers
 
 Each account has **Edit signaling templates…** in Account Settings. It stores

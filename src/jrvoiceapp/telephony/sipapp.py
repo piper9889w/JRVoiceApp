@@ -138,6 +138,33 @@ class SipAppProvider(TelephonyProvider):
     def available_audio_devices(self) -> dict[str, object]:
         return self.audio.get_audio_devices()
 
+    def diagnostics(self) -> dict[str, object]:
+        """Return a password-free snapshot suitable for the desktop diagnostics view."""
+        stats = self.audio.get_rtp_stats()
+        engine = self.engine
+        events = []
+        if engine:
+            events = [
+                f"{entry.timestamp} {entry.category}/{entry.direction} {entry.remote_addr} — {entry.summary}"
+                for entry in engine.log_entries[-100:]
+            ]
+        return {
+            "provider_state": self.state.value,
+            "transport": engine.transport if engine else "not started",
+            "tls_verification": "enabled" if engine and engine.tls_verify else "not available",
+            "local_signaling": f"{engine.local_ip}:{engine.local_port}" if engine else "—",
+            "last_network_error": engine.last_send_error if engine else "",
+            "codec": self.audio.negotiated_codec,
+            "media_security": stats["media_security"],
+            "rtp_local": f"{stats['advertised_ip']}:{stats['advertised_port']}",
+            "rtp_remote": f"{stats['remote_ip']}:{stats['remote_port']}",
+            "rtp_packets": f"TX {stats['packets_sent']} / RX {stats['packets_received']}",
+            "jitter": f"lost {stats['jitter_lost']} / duplicates {stats['jitter_duplicates']}",
+            "nat": stats["nat_status"],
+            "audio_error": stats["audio_error"],
+            "events": events,
+        }
+
     def set_emergency_location(self, location: str) -> None:
         """Keep a verified session location without writing it to diagnostics."""
         self.emergency_location = location
