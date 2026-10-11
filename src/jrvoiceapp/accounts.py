@@ -50,3 +50,7 @@ class AccountStore:
 
     def save_password(self, account_id: str, password: str) -> None:
         keyring.set_password(KEYRING_SERVICE, account_id, password)
+
+    def password_for(self, account_id: str) -> str:
+        """Read a password only when a provider is being started."""
+        return keyring.get_password(KEYRING_SERVICE, account_id) or ""

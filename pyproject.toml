@@ -34,3 +34,4 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["src/jrvoiceapp/telephony/sipapp_core"]

@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 
 from jrvoiceapp.accounts import AccountStore
 from jrvoiceapp.models import SAMPLE_RECENT_CALLS
+from jrvoiceapp.telephony.controller import TelephonyController
+from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.ui.account_dialog import AccountDialog
 from jrvoiceapp.ui.incoming_call import IncomingCallDialog
 
@@ -32,6 +34,8 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(780, 600)
         self.store = AccountStore()
         self.accounts = self.store.load()
+        self.controller = TelephonyController()
+        self.provider = None
         self.dial_input = QLineEdit()
         self.dial_input.setAccessibleName("Dial a name or number")
         self.dial_input.setPlaceholderText("Name or number")
@@ -180,11 +184,14 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         actions = QHBoxLayout()
         actions.addWidget(QPushButton("▣  Video"))
-        call = QPushButton("☎")
-        call.setObjectName("call")
-        call.setAccessibleName("Call")
-        call.setToolTip("Calling will be enabled when an account is configured.")
-        actions.addWidget(call)
+        self.call_button = QPushButton("☎")
+        self.call_button.setObjectName("call")
+        self.call_button.setAccessibleName("Call")
+        self.call_button.setToolTip(
+            "Connects the configured account, then dials the entered destination."
+        )
+        self.call_button.clicked.connect(self.place_call)
+        actions.addWidget(self.call_button)
         actions.addWidget(QPushButton("◉  Devices"))
         layout.addLayout(actions)
         return panel
@@ -253,6 +260,10 @@ class MainWindow(QMainWindow):
             button.setAccessibleName(label.replace("\n", " "))
             if label.endswith("End call"):
                 button.setObjectName("end")
+                button.clicked.connect(self.end_call)
+            elif label.endswith(("Transfer", "Hold")):
+                button.setEnabled(False)
+                button.setToolTip("SIPApp 1.8 does not implement this signaling control yet.")
             controls.addWidget(button, index // 3, index % 3)
         layout.addLayout(controls)
         return panel
@@ -288,26 +299,65 @@ class MainWindow(QMainWindow):
         else:
             self.account_label.setText("●  No account configured")
 
-    def show_incoming_call(self) -> None:
+    def place_call(self) -> None:
+        if not self.accounts:
+            self.open_account_dialog()
+            return
+        try:
+            if self.provider is None:
+                account = self.accounts[0]
+                password = self.store.password_for(account.identifier)
+                self.provider = self.controller.provider_for(account, password)
+                self.provider.add_event_callback(self._on_provider_event)
+                self.provider.start()
+            self.provider.dial(self.dial_input.text())
+        except (KeyringError, OSError, RuntimeError, ValueError) as error:
+            self.statusBar().showMessage(str(error), 8000)
+
+    def end_call(self) -> None:
+        if self.provider and isinstance(self.provider, SipAppProvider):
+            self.provider.hangup()
+
+    def _on_provider_event(self, event: str, details: dict[str, str]) -> None:
+        if event == "registration":
+            self.statusBar().showMessage(details.get("detail", "SIP registration update"), 8000)
+            return
+        if event == "diagnostic":
+            self.statusBar().showMessage(details.get("summary", "SIP diagnostic"), 5000)
+            return
+        if event == "call-state" and details.get("state") == "INCOMING_CALL":
+            caller = details.get("caller", "Unknown caller")
+            self.show_incoming_call(caller, details.get("from", ""), live=True)
+            return
+        if event == "call-state":
+            self.statusBar().showMessage(details.get("state", "Call update"), 5000)
+
+    def show_incoming_call(
+        self, caller: str = "Marcus Chen", number: str = "Extension 1002", live: bool = False
+    ) -> None:
         self.restore_window()
         self.tray.showMessage(
-            "Incoming call", "Marcus Chen is calling", QSystemTrayIcon.MessageIcon.Information, 8000
+            "Incoming call", f"{caller} is calling", QSystemTrayIcon.MessageIcon.Information, 8000
         )
-        dialog = IncomingCallDialog("Marcus Chen", "Extension 1002", self)
-        dialog.answer_requested.connect(
-            lambda: self.statusBar().showMessage("Answer is ready for the call engine.", 5000)
-        )
-        dialog.ignore_requested.connect(
-            lambda: self.statusBar().showMessage("Incoming call ignored.", 5000)
-        )
-        dialog.voicemail_requested.connect(
-            lambda: self.statusBar().showMessage(
-                "Voicemail routing is ready for the call engine.", 5000
-            )
-        )
+        dialog = IncomingCallDialog(caller, number or "Unknown number", self)
+        dialog.answer_requested.connect(lambda: self._answer_incoming(live))
+        dialog.ignore_requested.connect(lambda: self._ignore_incoming(live, voicemail=False))
+        dialog.voicemail_requested.connect(lambda: self._ignore_incoming(live, voicemail=True))
         self.incoming_dialog = dialog
         dialog.show()
         dialog.raise_()
+
+    def _answer_incoming(self, live: bool) -> None:
+        if live and isinstance(self.provider, SipAppProvider):
+            self.provider.answer()
+        self.statusBar().showMessage("Incoming call answered.", 5000)
+
+    def _ignore_incoming(self, live: bool, voicemail: bool) -> None:
+        if live and isinstance(self.provider, SipAppProvider):
+            self.provider.ignore(voicemail)
+        self.statusBar().showMessage(
+            "Incoming call sent to voicemail." if voicemail else "Incoming call ignored.", 5000
+        )
 
     def restore_window(self) -> None:
         self.showNormal()
@@ -328,6 +378,8 @@ class MainWindow(QMainWindow):
         )
 
     def quit_application(self) -> None:
+        if self.provider:
+            self.provider.stop()
         self._quitting = True
         self.tray.hide()
         self.close()

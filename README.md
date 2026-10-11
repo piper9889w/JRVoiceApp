@@ -4,7 +4,18 @@ JRVoiceApp is a desktop phone for Windows, macOS, and Linux. It will provide one
 
 ## Current status
 
-The first milestone provides a functional UI shell only. It demonstrates the intended dark desktop-phone experience, but it does **not** yet register accounts or place calls.
+The desktop shell now contains the maintained SIPApp transport, registration,
+RTP/G.711 audio, DNS resolution, and optional SDES-SRTP foundations. It can
+attempt TLS SIP registration from an OS-keychain-backed account and routes
+provider state, incoming calls, and diagnostics into the desktop UI. This is
+an integration milestone, not a claim of live PBX interoperability: live
+registration and calls remain unverified until tested against the target
+PBX/TLS/TURN environment.
+
+The imported SIPApp lineage is documented in
+[`sipapp_core/SIPAPP_PROVENANCE.md`](src/jrvoiceapp/telephony/sipapp_core/SIPAPP_PROVENANCE.md).
+Its upstream source had no declared license when incorporated, so confirm its
+distribution license before shipping a binary.
 
 ## Run the desktop shell
 

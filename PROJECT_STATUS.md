@@ -10,7 +10,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | --- | --- | --- |
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
 | Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
-| SIP calling | Blocked pending SIPApp source | The project must continue from the existing SIPApp implementation; do not substitute another SIP application or repository. |
+| SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; provider registration, call-state, RTP/G.711 audio, UI/tray events, and non-secret diagnostics are integrated but not live-PBX verified. |
 | WebRTC calling | In progress | SIP.js/JsSIP provider boundary and secure-WSS validation are implemented; the embedded runtime bridge remains next. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
 | Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password boundary, and SIP/WebRTC engine settings. |
@@ -60,10 +60,10 @@ This is the shared working checklist for the project. Update it in the same pull
 ### 6. Traditional SIP calling
 
 - [x] Record the SIP implementation decision: continue from SIPApp source in this project.
-- [ ] Bring the approved SIPApp source into JRVoiceApp and create the maintained integration boundary.
-- [ ] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage.
-- [ ] Add audio-device selection, DTMF, hold, transfer, and voicemail.
-- [ ] Add certificate validation and useful network error reporting.
+- [x] Bring the approved SIPApp source into JRVoiceApp and create the maintained integration boundary (source commit `8464088`; no upstream license declaration, recorded in provenance).
+- [~] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage (TLS registration/call adapter is implemented; target-PBX validation and TCP/UDP account selection remain).
+- [~] Add audio-device selection, DTMF, hold, transfer, and voicemail (SIPApp RTP/G.711 audio and voicemail dialing are integrated; the inherited code has no DTMF, SIP hold, or transfer implementation).
+- [~] Add certificate validation and useful network error reporting (TLS verification and provider diagnostics are wired; real certificate/network scenarios remain to be tested).
 
 ### 7. Unified experience
 
