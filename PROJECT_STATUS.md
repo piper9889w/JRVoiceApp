@@ -10,8 +10,8 @@ This is the shared working checklist for the project. Update it in the same pull
 | --- | --- | --- |
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
 | Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
-| SIP calling | Planned | No account registration or audio implementation yet. |
-| WebRTC calling | Planned | Engine choices are documented; no runtime engine is connected yet. |
+| SIP calling | In progress | Native Baresip provider starts with a temporary, private runtime profile; registration/call tests need the target PBX. |
+| WebRTC calling | In progress | SIP.js/JsSIP provider boundary and secure-WSS validation are implemented; the embedded runtime bridge remains next. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
 | Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password boundary, and SIP/WebRTC engine settings. |
 | Releases | Planned | No installers have been built. |
@@ -52,15 +52,15 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 5. WebRTC calling
 
-- [ ] Implement SIP.js as the recommended WSS/WebRTC engine.
-- [ ] Implement JsSIP as an alternate selectable engine.
-- [ ] Document and implement the limited experimental aiortc path.
+- [~] Implement SIP.js as the recommended WSS/WebRTC engine.
+- [~] Implement JsSIP as an alternate selectable engine.
+- [x] Document and enforce the limited experimental aiortc path.
 - [ ] Add microphone, speaker, codec, ICE, and TURN diagnostics.
 
 ### 6. Traditional SIP calling
 
-- [ ] Select and integrate the native SIP engine.
-- [ ] Add SIP TLS/TCP/UDP registration and call setup.
+- [x] Select the cross-platform native SIP engine: Baresip.
+- [~] Add SIP TLS/TCP/UDP registration and call setup.
 - [ ] Add audio-device selection, DTMF, hold, transfer, and voicemail.
 - [ ] Add certificate validation and useful network error reporting.
 
