@@ -9,10 +9,11 @@ This is the shared working checklist for the project. Update it in the same pull
 | Area | Status | What exists now |
 | --- | --- | --- |
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
-| Desktop interface | Complete | Mockup-inspired dark phone window with dialer, connection status, recents, and call controls. |
+| Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
 | SIP calling | Planned | No account registration or audio implementation yet. |
 | WebRTC calling | Planned | Engine choices are documented; no runtime engine is connected yet. |
-| Tray and incoming calls | Planned | UI design direction is defined; no operating-system behavior yet. |
+| Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
+| Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password boundary, and SIP/WebRTC engine settings. |
 | Releases | Planned | No installers have been built. |
 
 ## Delivery checklist
@@ -30,23 +31,24 @@ This is the shared working checklist for the project. Update it in the same pull
 - [x] Build the initial Global Voice-style dark phone window.
 - [x] Add dial pad input, extension status, security indicators, recents, and active-line controls.
 - [x] Keep the application independent of a particular SIP/WebRTC provider.
-- [ ] Add responsive behavior and accessibility review.
-- [ ] Create visual regression screenshots after the UI dependency environment is available.
+- [x] Add responsive layout behavior and accessible names for primary controls.
+- [ ] Create visual regression screenshots.
 
 ### 3. Background operation and incoming calls
 
-- [ ] Add minimize-to-tray and restore behavior.
-- [ ] Add an incoming-call popup with caller identity.
-- [ ] Add **Answer**, **Ignore**, and **Send to voicemail** actions.
-- [ ] Add native notifications and optional launch-at-login.
+- [x] Add minimize-to-tray and restore behavior.
+- [x] Add an incoming-call popup with caller identity.
+- [x] Add **Answer**, **Ignore**, and **Send to voicemail** actions in the UI foundation.
+- [x] Add native notifications.
+- [ ] Add optional launch-at-login.
 
 ### 4. Accounts and secure configuration
 
-- [ ] Add the account list and add/edit account flow.
+- [x] Add the initial account add/edit flow.
 - [ ] Add manual setup and provisioning-server enrollment.
-- [ ] Store secrets in the operating-system keychain, never plaintext settings.
-- [ ] Add connection type selection: SIP or WebRTC.
-- [ ] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
+- [x] Store secrets in the operating-system keychain, never plaintext settings.
+- [x] Add connection type selection: SIP or WebRTC.
+- [x] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
 
 ### 5. WebRTC calling
 

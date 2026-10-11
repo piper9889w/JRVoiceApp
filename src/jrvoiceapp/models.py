@@ -9,6 +9,35 @@ class ConnectionKind(StrEnum):
     WEBRTC = "WebRTC WSS"
 
 
+class WebRtcEngine(StrEnum):
+    SIPJS = "SIP.js (recommended)"
+    JSSIP = "JsSIP"
+    AIORTC = "aiortc (experimental)"
+
+
+@dataclass(frozen=True)
+class AccountConfig:
+    """Non-secret account settings; passwords are stored separately in the OS keychain."""
+
+    identifier: str
+    label: str
+    username: str
+    server: str
+    connection_kind: ConnectionKind
+    web_rtc_engine: WebRtcEngine = WebRtcEngine.SIPJS
+    voicemail_number: str = "*97"
+
+    def validate(self) -> None:
+        if not self.identifier.strip() or not self.label.strip():
+            raise ValueError("An account name is required.")
+        if not self.username.strip() or not self.server.strip():
+            raise ValueError("Extension and server are required.")
+        if self.connection_kind is ConnectionKind.WEBRTC and not self.server.startswith(
+            ("wss://", "ws://")
+        ):
+            raise ValueError("A WebRTC account needs a ws:// or wss:// server URL.")
+
+
 @dataclass(frozen=True)
 class RecentCall:
     initials: str

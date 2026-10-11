@@ -24,4 +24,5 @@ QPushButton#end { background: #ed3157; border: 0; border-radius: 26px; font-size
 QLineEdit { background: #0e1c2e; color: #edf4ff; border: 1px solid #2a405c; border-radius: 13px; padding: 14px 18px; font-size: 18px; }
 QLineEdit:focus { border: 1px solid #3b8bff; }
 QScrollArea { border: 0; background: transparent; }
+QDialog { background: #0d1a2a; }
 """
