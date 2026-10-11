@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jrvoiceapp"
+version = "0.1.0"
+description = "A cross-platform SIP and WebRTC desktop phone."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "JRVoiceApp contributors" }]
+dependencies = [
+  "PySide6>=6.7,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+package = ["pyinstaller>=6.0"]
+
+[project.scripts]
+jrvoiceapp = "jrvoiceapp.main:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,91 @@
+# JRVoiceApp project status
+
+Last updated: 2026-10-10
+
+This is the shared working checklist for the project. Update it in the same pull request or commit as the work it describes. Use `[x]` only for work that has been implemented and verified; use `[~]` for active work; use `[ ]` for planned work.
+
+## Current snapshot
+
+| Area | Status | What exists now |
+| --- | --- | --- |
+| Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
+| Desktop interface | Complete | Mockup-inspired dark phone window with dialer, connection status, recents, and call controls. |
+| SIP calling | Planned | No account registration or audio implementation yet. |
+| WebRTC calling | Planned | Engine choices are documented; no runtime engine is connected yet. |
+| Tray and incoming calls | Planned | UI design direction is defined; no operating-system behavior yet. |
+| Releases | Planned | No installers have been built. |
+
+## Delivery checklist
+
+### 1. Foundation and product specification
+
+- [x] Create the public `piper9889w/JRVoiceApp` repository.
+- [x] Create the Python package and local application entry point.
+- [x] Add README, license, roadmap, architecture, and this status file.
+- [x] Add a Windows/macOS/Linux quality-check workflow.
+- [x] Define protocol-provider and security boundaries.
+
+### 2. Desktop shell and mockup-based interface
+
+- [x] Build the initial Global Voice-style dark phone window.
+- [x] Add dial pad input, extension status, security indicators, recents, and active-line controls.
+- [x] Keep the application independent of a particular SIP/WebRTC provider.
+- [ ] Add responsive behavior and accessibility review.
+- [ ] Create visual regression screenshots after the UI dependency environment is available.
+
+### 3. Background operation and incoming calls
+
+- [ ] Add minimize-to-tray and restore behavior.
+- [ ] Add an incoming-call popup with caller identity.
+- [ ] Add **Answer**, **Ignore**, and **Send to voicemail** actions.
+- [ ] Add native notifications and optional launch-at-login.
+
+### 4. Accounts and secure configuration
+
+- [ ] Add the account list and add/edit account flow.
+- [ ] Add manual setup and provisioning-server enrollment.
+- [ ] Store secrets in the operating-system keychain, never plaintext settings.
+- [ ] Add connection type selection: SIP or WebRTC.
+- [ ] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
+
+### 5. WebRTC calling
+
+- [ ] Implement SIP.js as the recommended WSS/WebRTC engine.
+- [ ] Implement JsSIP as an alternate selectable engine.
+- [ ] Document and implement the limited experimental aiortc path.
+- [ ] Add microphone, speaker, codec, ICE, and TURN diagnostics.
+
+### 6. Traditional SIP calling
+
+- [ ] Select and integrate the native SIP engine.
+- [ ] Add SIP TLS/TCP/UDP registration and call setup.
+- [ ] Add audio-device selection, DTMF, hold, transfer, and voicemail.
+- [ ] Add certificate validation and useful network error reporting.
+
+### 7. Unified experience
+
+- [ ] Combine SIP and WebRTC history, contacts, dialer, and presence.
+- [ ] Display account, codec, encryption, and call-quality status.
+- [ ] Define deterministic account-routing rules for outbound calls.
+
+### 8. Provisioning integration
+
+- [ ] Implement the existing VoiceAdmin HTTP Basic profile download flow.
+- [ ] Map provisioned fields to JRVoiceApp account settings.
+- [ ] Add refresh, retry, and safe error messages.
+
+### 9. Packaging and verification
+
+- [ ] Produce Windows installer, signed macOS app, and Linux package.
+- [ ] Test inbound/outbound SIP and WebRTC calls on all supported operating systems.
+- [ ] Verify tray notifications, sleep/wake recovery, and credential handling.
+
+### 10. Polish and release readiness
+
+- [ ] Refine the interface against the approved visual direction.
+- [ ] Add user/admin documentation and troubleshooting guides.
+- [ ] Publish a versioned release process.
+
+## How to add work
+
+Add new tasks under the closest numbered phase. Give each item a short, testable description. If a request spans multiple phases, add it to the earliest phase and link to its later dependency in parentheses. Keep this file honest: do not mark an item complete until it is implemented and verified.
