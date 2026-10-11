@@ -4,7 +4,9 @@ from jrvoiceapp.models import (
     SAMPLE_RECENT_CALLS,
     AccountConfig,
     ConnectionKind,
+    EmergencyConfig,
     SignalingTemplates,
+    UserEmergencySettings,
     WebRtcEngine,
 )
 from jrvoiceapp.telephony.controller import TelephonyController
@@ -103,3 +105,11 @@ def test_sipapp_200_ok_template_renders_header_variables() -> None:
     response = engine._build_response(request, 200, "OK", "v=0\r\n")
     assert "X-Correlation: abc-123" in response
     assert "X-trace-id: abc-123" in response
+
+
+def test_emergency_location_and_user_dial_string_limits() -> None:
+    config = EmergencyConfig(True, ["HQ", "Branch"], "HQ")
+    config.validate()
+    assert UserEmergencySettings("911, 112, 999").numbers() == {"911", "112", "999"}
+    with pytest.raises(ValueError, match="five"):
+        EmergencyConfig(locations=[str(index) for index in range(6)]).validate()

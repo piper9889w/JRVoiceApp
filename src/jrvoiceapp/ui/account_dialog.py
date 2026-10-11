@@ -17,15 +17,30 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from jrvoiceapp.models import AccountConfig, ConnectionKind, SignalingTemplates, WebRtcEngine
+from jrvoiceapp.models import (
+    AccountConfig,
+    ConnectionKind,
+    EmergencyConfig,
+    SignalingTemplates,
+    UserEmergencySettings,
+    WebRtcEngine,
+)
+from jrvoiceapp.ui.emergency_dialog import EmergencySettingsDialog
 from jrvoiceapp.ui.signaling_dialog import SignalingDialog
 
 
 class AccountDialog(QDialog):
-    def __init__(self, account: AccountConfig | None = None, parent=None) -> None:
+    def __init__(
+        self,
+        account: AccountConfig | None = None,
+        user_emergency_settings: UserEmergencySettings | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.account = account
         self.signaling = account.signaling if account else None
+        self.emergency = account.emergency if account else EmergencyConfig()
+        self.user_emergency_settings = user_emergency_settings or UserEmergencySettings()
         self.setWindowTitle("Add account" if account is None else "Edit account")
         self.setMinimumWidth(460)
         layout = QVBoxLayout(self)
@@ -68,6 +83,9 @@ class AccountDialog(QDialog):
         signaling_row.addWidget(signaling_button)
         signaling_row.addStretch()
         layout.addLayout(signaling_row)
+        emergency_button = QPushButton("Emergency dialing and location…")
+        emergency_button.clicked.connect(self.open_emergency_dialog)
+        layout.addWidget(emergency_button)
         self.engine_select.setToolTip(
             "SIP.js is recommended. JsSIP is an alternate engine. aiortc is experimental."
         )
@@ -101,9 +119,15 @@ class AccountDialog(QDialog):
             web_rtc_engine=WebRtcEngine(self.engine_select.currentText()),
             voicemail_number=self.voicemail_input.text().strip() or "*97",
             signaling=self.signaling or SignalingTemplates(),
+            emergency=self.emergency,
         )
 
     def open_signaling_dialog(self) -> None:
         dialog = SignalingDialog(self.signaling or SignalingTemplates(), self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.signaling = dialog.result_templates()
+
+    def open_emergency_dialog(self) -> None:
+        dialog = EmergencySettingsDialog(self.emergency, self.user_emergency_settings, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.emergency, self.user_emergency_settings = dialog.result_values()

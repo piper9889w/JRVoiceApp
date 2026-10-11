@@ -49,6 +49,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [x] Store secrets in the operating-system keychain, never plaintext settings.
 - [x] Add connection type selection: SIP or WebRTC.
 - [x] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
+- [~] Add per-account PIDF-LO support/location preferences and user-level emergency dial strings (saved locations, verification prompt, and temporary session location are implemented; PIDF-LO SIP transmission and carrier validation remain).
 
 ### 5. WebRTC calling
 

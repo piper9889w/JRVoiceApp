@@ -41,6 +41,22 @@ injection. The WebRTC bridge receives the same settings for its future
 SIP.js/JsSIP implementation; it is configuration-ready but not live-runtime
 validated yet.
 
+## Emergency dialing and PIDF-LO
+
+**Emergency dialing and location…** in Account Settings stores a per-account
+provider-support flag, up to five non-secret saved locations, and a default
+location. Emergency dial strings (default `911`) are app-wide and accept a
+comma-separated list such as `911, 112, 999`; this supports regional and
+office-specific dial plans. When a PIDF-LO-enabled account registers, the app
+asks the user to confirm the default or another saved location, or to provide
+a temporary location for the current session. An emergency call similarly
+requires that confirmation.
+
+This is a safety UI/configuration foundation only. The current SIPApp transport
+does **not** yet construct or transmit a standards-compliant PIDF-LO body or
+Geolocation header. Do not rely on it for emergency location delivery until
+that protocol work has been implemented and validated with the carrier/PBX.
+
 ## WebRTC requirements
 
 WebRTC accounts use a valid `wss://` endpoint. SIP.js is the intended default and JsSIP is a selectable alternative. Both require an embedded Chromium runtime, microphone permission, a trusted TLS certificate, and ICE/TURN configuration appropriate for the user’s network.

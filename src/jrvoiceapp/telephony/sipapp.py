@@ -28,6 +28,7 @@ class SipAppProvider(TelephonyProvider):
         self.engine: SIPEngine | None = None
         self.registration: RegistrationManager | None = None
         self.audio = AudioEngine()
+        self.emergency_location = ""
 
     def _profile(self) -> dict[str, object]:
         value = self.account.server.strip()
@@ -111,6 +112,11 @@ class SipAppProvider(TelephonyProvider):
 
     def dial_voicemail(self) -> None:
         self.dial(self.account.voicemail_number)
+
+    def set_emergency_location(self, location: str) -> None:
+        """Keep a verified session location without writing it to diagnostics."""
+        self.emergency_location = location
+        self._emit("emergency-location-verified")
 
     def stop(self) -> None:
         self.audio.stop_rtp_stream()

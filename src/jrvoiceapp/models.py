@@ -40,6 +40,37 @@ class SignalingTemplates:
 
 
 @dataclass(frozen=True)
+class EmergencyConfig:
+    """Non-secret PIDF-LO preferences for an individual account."""
+
+    enabled: bool = False
+    locations: list[str] = field(default_factory=list)
+    default_location: str = ""
+
+    def validate(self) -> None:
+        if len(self.locations) > 5:
+            raise ValueError("Save at most five emergency locations per account.")
+        if any(not location.strip() for location in self.locations):
+            raise ValueError("Emergency locations cannot be blank.")
+        if self.default_location and self.default_location not in self.locations:
+            raise ValueError("The default emergency location must be one of the saved locations.")
+
+
+@dataclass(frozen=True)
+class UserEmergencySettings:
+    """Application-wide dial strings; deliberately separate from SIP credentials."""
+
+    dial_strings: str = "911"
+
+    def numbers(self) -> set[str]:
+        return {value.strip() for value in self.dial_strings.split(",") if value.strip()}
+
+    def validate(self) -> None:
+        if not self.numbers():
+            raise ValueError("Enter at least one emergency dial string.")
+
+
+@dataclass(frozen=True)
 class AccountConfig:
     """Non-secret account settings; passwords are stored separately in the OS keychain."""
 
@@ -51,6 +82,7 @@ class AccountConfig:
     web_rtc_engine: WebRtcEngine = WebRtcEngine.SIPJS
     voicemail_number: str = "*97"
     signaling: SignalingTemplates = field(default_factory=SignalingTemplates)
+    emergency: EmergencyConfig = field(default_factory=EmergencyConfig)
 
     def validate(self) -> None:
         if not self.identifier.strip() or not self.label.strip():
@@ -62,6 +94,7 @@ class AccountConfig:
         ):
             raise ValueError("A WebRTC account needs a ws:// or wss:// server URL.")
         self.signaling.validate()
+        self.emergency.validate()
 
 
 @dataclass(frozen=True)

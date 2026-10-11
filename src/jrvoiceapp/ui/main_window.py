@@ -23,6 +23,7 @@ from jrvoiceapp.models import SAMPLE_RECENT_CALLS
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.ui.account_dialog import AccountDialog
+from jrvoiceapp.ui.emergency_dialog import EmergencyLocationDialog
 from jrvoiceapp.ui.incoming_call import IncomingCallDialog
 
 
@@ -34,6 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(780, 600)
         self.store = AccountStore()
         self.accounts = self.store.load()
+        self.user_emergency_settings = self.store.load_user_emergency_settings()
         self.controller = TelephonyController()
         self.provider = None
         self.dial_input = QLineEdit()
@@ -275,7 +277,7 @@ class MainWindow(QMainWindow):
 
     def open_account_dialog(self) -> None:
         account = self.accounts[0] if self.accounts else None
-        dialog = AccountDialog(account, self)
+        dialog = AccountDialog(account, self.user_emergency_settings, self)
         if dialog.exec() != AccountDialog.DialogCode.Accepted:
             return
         result = dialog.result_account()
@@ -285,6 +287,8 @@ class MainWindow(QMainWindow):
             else:
                 self.accounts.append(result)
             self.store.save(self.accounts)
+            self.user_emergency_settings = dialog.user_emergency_settings
+            self.store.save_user_emergency_settings(self.user_emergency_settings)
             if dialog.password_input.text():
                 self.store.save_password(result.identifier, dialog.password_input.text())
         except (KeyringError, OSError, ValueError) as error:
@@ -310,6 +314,11 @@ class MainWindow(QMainWindow):
                 self.provider = self.controller.provider_for(account, password)
                 self.provider.add_event_callback(self._on_provider_event)
                 self.provider.start()
+            if (
+                self._is_emergency_dial(self.dial_input.text())
+                and not self._confirm_emergency_location()
+            ):
+                return
             self.provider.dial(self.dial_input.text())
         except (KeyringError, OSError, RuntimeError, ValueError) as error:
             self.statusBar().showMessage(str(error), 8000)
@@ -321,6 +330,8 @@ class MainWindow(QMainWindow):
     def _on_provider_event(self, event: str, details: dict[str, str]) -> None:
         if event == "registration":
             self.statusBar().showMessage(details.get("detail", "SIP registration update"), 8000)
+            if details.get("status") == "REGISTERED":
+                self._prompt_emergency_location_on_registration()
             return
         if event == "diagnostic":
             self.statusBar().showMessage(details.get("summary", "SIP diagnostic"), 5000)
@@ -358,6 +369,28 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "Incoming call sent to voicemail." if voicemail else "Incoming call ignored.", 5000
         )
+
+    def _is_emergency_dial(self, destination: str) -> bool:
+        return destination.strip() in self.user_emergency_settings.numbers()
+
+    def _confirm_emergency_location(self) -> bool:
+        if not self.accounts or not self.accounts[0].emergency.enabled:
+            return True
+        dialog = EmergencyLocationDialog(self.accounts[0].emergency, self)
+        if dialog.exec() != EmergencyLocationDialog.DialogCode.Accepted:
+            return False
+        location = dialog.selected_location()
+        if not location:
+            self.statusBar().showMessage("Emergency calling requires a verified location.", 8000)
+            return False
+        if isinstance(self.provider, SipAppProvider):
+            self.provider.set_emergency_location(location)
+        return True
+
+    def _prompt_emergency_location_on_registration(self) -> None:
+        if not self.accounts or not self.accounts[0].emergency.enabled:
+            return
+        self._confirm_emergency_location()
 
     def restore_window(self) -> None:
         self.showNormal()

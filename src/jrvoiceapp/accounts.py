@@ -9,7 +9,14 @@ from pathlib import Path
 import keyring
 from PySide6.QtCore import QStandardPaths
 
-from jrvoiceapp.models import AccountConfig, ConnectionKind, SignalingTemplates, WebRtcEngine
+from jrvoiceapp.models import (
+    AccountConfig,
+    ConnectionKind,
+    EmergencyConfig,
+    SignalingTemplates,
+    UserEmergencySettings,
+    WebRtcEngine,
+)
 
 KEYRING_SERVICE = "JRVoiceApp"
 
@@ -37,6 +44,7 @@ class AccountStore:
                 web_rtc_engine=WebRtcEngine(item.get("web_rtc_engine", WebRtcEngine.SIPJS)),
                 voicemail_number=item.get("voicemail_number", "*97"),
                 signaling=SignalingTemplates(**item.get("signaling", {})),
+                emergency=EmergencyConfig(**item.get("emergency", {})),
             )
             for item in raw
         ]
@@ -55,3 +63,19 @@ class AccountStore:
     def password_for(self, account_id: str) -> str:
         """Read a password only when a provider is being started."""
         return keyring.get_password(KEYRING_SERVICE, account_id) or ""
+
+    @property
+    def emergency_settings_path(self) -> Path:
+        return self.path.with_name("emergency-settings.json")
+
+    def load_user_emergency_settings(self) -> UserEmergencySettings:
+        path = self.emergency_settings_path
+        if not path.exists():
+            return UserEmergencySettings()
+        return UserEmergencySettings(**json.loads(path.read_text(encoding="utf-8")))
+
+    def save_user_emergency_settings(self, settings: UserEmergencySettings) -> None:
+        settings.validate()
+        path = self.emergency_settings_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
