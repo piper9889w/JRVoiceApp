@@ -1,39 +1,21 @@
-# Telephony setup
+# Telephony setup and continuation decision
 
-JRVoiceApp has two provider paths. They share the same account screen, but they have different deployment requirements.
+## Non-negotiable SIP direction
 
-## Traditional SIP: Baresip
+Continue SIP development from the existing **SIPApp** code. Bring the approved SIPApp source into JRVoiceApp as maintained project code, then adapt it to the account, keychain, tray, notification, and call-control layers already in this repository.
 
-The initial native SIP provider uses [Baresip](https://github.com/baresip/baresip), a cross-platform SIP user agent. Install the `baresip` executable on the client machine and ensure it is available on the system path.
+Do **not** replace SIPApp with Baresip, another softphone, or an unrelated SIP repository. JRVoiceApp should have one controlled SIP lineage.
 
-When a SIP account starts, JRVoiceApp creates a private, temporary runtime directory and places its generated `accounts` file there with owner-only permissions. The file is removed when the provider stops. The account password comes from the operating-system keychain and must not be committed to this repository or placed in a settings file.
+## First task when SIPApp source is available
 
-Before live testing, confirm:
+1. Identify the SIPApp transport, registration, call-state, audio, DTMF, hold, transfer, and voicemail components.
+2. Port or incorporate those components into `src/jrvoiceapp/telephony/` while retaining their license notices and tests.
+3. Implement `SipAppProvider` using that code, without exposing account secrets outside the OS keychain boundary.
+4. Wire provider events to the existing tray alert, incoming-call popup, active-line panel, and diagnostics.
+5. Test registration and calls against the target PBX before marking SIP work complete.
 
-- SIP transport: TLS, TCP, or UDP as supported by the target PBX
-- Correct registrar/proxy hostname and port
-- Authentication username and secret
-- Network/RTP reachability and selected codecs
-- A Baresip configuration with the desired audio modules for each target operating system
+## WebRTC requirements
 
-## WebRTC: SIP.js or JsSIP
+WebRTC accounts use a valid `wss://` endpoint. SIP.js is the intended default and JsSIP is a selectable alternative. Both require an embedded Chromium runtime, microphone permission, a trusted TLS certificate, and ICE/TURN configuration appropriate for the user’s network.
 
-WebRTC accounts must use a valid `wss://` endpoint. SIP.js is the intended default and JsSIP is a selectable alternative. Both require an embedded Chromium runtime, microphone permission, a trusted TLS certificate, and an ICE/TURN configuration appropriate for the user’s network.
-
-Before live testing, confirm:
-
-- WSS URL and SIP authentication credentials
-- Browser-trusted HTTPS/WSS certificate chain
-- Kamailio/Asterisk WebSocket and WebRTC media configuration
-- TURN credentials for clients outside the local network
-- Codec interoperability: Opus for WebRTC and an agreed PBX bridge codec such as PCMU/PCMA
-
-`aiortc` remains visible only as an experimental future option. It is not a complete SIP-over-WSS replacement and the application rejects it for production account registration.
-
-## Live-call test plan
-
-1. Register a SIP account and a WebRTC account to the same PBX.
-2. Place calls in both directions between those accounts.
-3. Verify inbound notifications, Answer, Ignore, and voicemail routing.
-4. Test microphone/speaker selection, DTMF, hold, transfer, and sleep/wake recovery.
-5. Repeat from an external network through TURN.
+`aiortc` remains an experimental future option. It is not a complete SIP-over-WSS replacement and the application rejects it for production registration.

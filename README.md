@@ -1,6 +1,6 @@
 # JRVoiceApp
 
-JRVoiceApp is a desktop phone for Windows, macOS, and Linux. It will provide one familiar dialer and call history for both traditional SIP accounts and browser-grade WebRTC accounts.
+JRVoiceApp is a desktop phone for Windows, macOS, and Linux. It will provide one familiar dialer and call history for both traditional SIP accounts and browser-grade WebRTC accounts. Its SIP implementation will continue from the existing SIPApp development work, incorporated into this project rather than replaced with another softphone project.
 
 ## Current status
 

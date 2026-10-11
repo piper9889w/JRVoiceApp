@@ -1,8 +1,8 @@
 """Select exactly one engine per configured account."""
 
 from jrvoiceapp.models import AccountConfig, ConnectionKind
-from jrvoiceapp.telephony.baresip import BaresipProvider
 from jrvoiceapp.telephony.base import TelephonyProvider
+from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.telephony.webrtc import WebRtcProvider
 
 
@@ -11,4 +11,4 @@ class TelephonyController:
         account.validate()
         if account.connection_kind is ConnectionKind.WEBRTC:
             return WebRtcProvider(account, password)
-        return BaresipProvider(account, password)
+        return SipAppProvider(account, password)

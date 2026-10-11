@@ -10,7 +10,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | --- | --- | --- |
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
 | Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
-| SIP calling | In progress | Native Baresip provider starts with a temporary, private runtime profile; registration/call tests need the target PBX. |
+| SIP calling | Blocked pending SIPApp source | The project must continue from the existing SIPApp implementation; do not substitute another SIP application or repository. |
 | WebRTC calling | In progress | SIP.js/JsSIP provider boundary and secure-WSS validation are implemented; the embedded runtime bridge remains next. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
 | Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password boundary, and SIP/WebRTC engine settings. |
@@ -59,8 +59,9 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 6. Traditional SIP calling
 
-- [x] Select the cross-platform native SIP engine: Baresip.
-- [~] Add SIP TLS/TCP/UDP registration and call setup.
+- [x] Record the SIP implementation decision: continue from SIPApp source in this project.
+- [ ] Bring the approved SIPApp source into JRVoiceApp and create the maintained integration boundary.
+- [ ] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage.
 - [ ] Add audio-device selection, DTMF, hold, transfer, and voicemail.
 - [ ] Add certificate validation and useful network error reporting.
 
