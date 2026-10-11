@@ -41,6 +41,8 @@ On Windows, activate the virtual environment with `.venv\\Scripts\\activate` bef
 
 See [the roadmap](docs/ROADMAP.md), [architecture notes](docs/ARCHITECTURE.md), and the editable [project status checklist](PROJECT_STATUS.md) for the planned implementation boundaries.
 
+For a durable continuation summary, see [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md).
+
 For the SIP and WebRTC provider requirements and the live-call validation sequence, see [telephony setup](docs/TELEPHONY_SETUP.md).
 
 ## Technology choices

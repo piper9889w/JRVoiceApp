@@ -18,9 +18,11 @@ startup and the provider never includes it in events or diagnostics.
 
 SIPApp v1.8 supplies registration, outbound/inbound calls, RTP audio,
 voicemail dialing, cancellation/BYE, and session refresh. It does **not**
-implement SIP hold, transfer, or DTMF signaling; those controls remain
-disabled/pending rather than being represented as working. Its source did not
-include a license declaration, which is recorded in `sipapp_core/SIPAPP_PROVENANCE.md`.
+implement SIP hold, transfer, or DTMF signaling itself. JRVoiceApp now extends
+that maintained lineage with SIP INFO DTMF, SIP UPDATE hold/resume, and blind
+SIP REFER transfer; all remain pending live-PBX interoperability validation.
+Its source did not include a license declaration, which is recorded in
+`sipapp_core/SIPAPP_PROVENANCE.md`.
 
 Run live registration and inbound/outbound audio tests against the target PBX
 before treating any SIP feature as complete. The default TLS certificate and
