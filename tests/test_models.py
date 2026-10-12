@@ -251,6 +251,7 @@ def test_outbound_routing_prefers_explicit_domain_then_stable_identifier() -> No
     bravo = AccountConfig("b", "Bravo", "1002", "bravo.example", ConnectionKind.SIP)
     assert controller.route_outbound([bravo, alpha], "1003") is alpha
     assert controller.route_outbound([alpha, bravo], "sip:1003@bravo.example") is bravo
+    assert controller.route_outbound([alpha, bravo], "1003", "b") is bravo
 
 
 def test_webrtc_diagnostics_are_safe_and_do_not_include_password() -> None:

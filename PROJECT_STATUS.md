@@ -68,9 +68,9 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 7. Unified experience
 
-- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store, basic contact add/dial UI, active-line state, and SIP terminal-state history updates are implemented; richer contact management and live-provider completion states remain).
+- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted history, add/edit/delete/dial contacts, history view, active-line media state, and SIP terminal-state updates are implemented; live-provider completion states remain).
 - [ ] Display account, codec, encryption, and call-quality status.
-- [~] Define deterministic account-routing rules for outbound calls (explicit SIP-domain match, then stable account-ID ordering; multi-account UI selection remains).
+- [~] Define deterministic account-routing rules for outbound calls (explicit SIP-domain match, then persisted default account or stable account-ID ordering; per-call picker remains).
 - [~] Add per-account editable SIP/WebRTC INVITE and 200 OK templates plus reusable custom-header variables (SIPApp adapter applies SIP templates; WebRTC bridge configuration is ready pending runtime integration).
 
 ### 8. Provisioning integration

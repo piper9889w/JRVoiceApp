@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
         self.accounts = self.store.load()
         self.user_emergency_settings = self.store.load_user_emergency_settings()
         self.audio_settings = self.store.load_audio_settings()
+        self.default_account_id = self.store.load_default_account_id()
         self.records_store = RecordsStore()
         self.contacts, self.call_history = self.records_store.load()
         self.controller = TelephonyController()
@@ -120,12 +121,18 @@ class MainWindow(QMainWindow):
             button.setChecked(label.endswith("Phone"))
             if label.endswith("Contacts"):
                 button.clicked.connect(self.manage_contacts)
+            if label.endswith("Recent calls"):
+                button.clicked.connect(self.show_history)
             layout.addWidget(button)
         settings = QPushButton("⚙  Settings")
         settings.setObjectName("nav")
         settings.clicked.connect(self.open_account_dialog)
         settings.setAccessibleName("Account settings")
         layout.addWidget(settings)
+        routing = QPushButton("⇄  Default account")
+        routing.setObjectName("nav")
+        routing.clicked.connect(self.choose_default_account)
+        layout.addWidget(routing)
         diagnostics = QPushButton("⌁  Diagnostics")
         diagnostics.setObjectName("nav")
         diagnostics.clicked.connect(self.open_diagnostics)
@@ -369,7 +376,9 @@ class MainWindow(QMainWindow):
             return
         try:
             if self.provider is None:
-                account = self.controller.route_outbound(self.accounts, self.dial_input.text())
+                account = self.controller.route_outbound(
+                    self.accounts, self.dial_input.text(), self.default_account_id
+                )
                 password = self.store.password_for(account.identifier)
                 self.provider = self.controller.provider_for(account, password)
                 if isinstance(self.provider, SipAppProvider):
@@ -478,19 +487,85 @@ class MainWindow(QMainWindow):
                     details["state"].title(),
                 )
             self.statusBar().showMessage(details.get("state", "Call update"), 5000)
+        if event == "media":
+            self.active_line_status.setText(
+                " · ".join(
+                    value for value in (details.get("codec"), details.get("remote")) if value
+                )
+                or "Media active"
+            )
 
     def manage_contacts(self) -> None:
-        name, accepted = QInputDialog.getText(self, "Add contact", "Name:")
+        choices = ["Add", "Dial", "Edit", "Delete"]
+        action, accepted = QInputDialog.getItem(
+            self, "Contacts", "Action:", choices, editable=False
+        )
+        if not accepted:
+            return
+        if action != "Add":
+            names = [f"{item.name} — {item.address}" for item in self.contacts]
+            selected, accepted = QInputDialog.getItem(
+                self, "Contacts", "Contact:", names, editable=False
+            )
+            if not accepted:
+                return
+            index = names.index(selected)
+            if action == "Dial":
+                self.dial_input.setText(self.contacts[index].address)
+                return
+            if action == "Delete":
+                self.contacts.pop(index)
+                self.records_store.save(self.contacts, self.call_history)
+                return
+        name, accepted = QInputDialog.getText(
+            self,
+            "Add contact" if action == "Add" else "Edit contact",
+            "Name:",
+            text="" if action == "Add" else self.contacts[index].name,
+        )
         if not accepted or not name.strip():
             return
-        address, accepted = QInputDialog.getText(self, "Add contact", "Number or SIP address:")
+        address, accepted = QInputDialog.getText(
+            self,
+            "Contact",
+            "Number or SIP address:",
+            text="" if action == "Add" else self.contacts[index].address,
+        )
         if not accepted or not address.strip():
             return
         from jrvoiceapp.records import Contact
 
-        self.contacts = [*self.contacts, Contact(name.strip(), address.strip())]
+        self.contacts = (
+            [*self.contacts, Contact(name.strip(), address.strip())]
+            if action == "Add"
+            else [
+                *self.contacts[:index],
+                Contact(name.strip(), address.strip()),
+                *self.contacts[index + 1 :],
+            ]
+        )
         self.records_store.save(self.contacts, self.call_history)
         self.dial_input.setText(address.strip())
+
+    def show_history(self) -> None:
+        QMessageBox.information(
+            self,
+            "Call history",
+            "\n".join(
+                f"{call.occurred_at[:16]}  {call.direction}  {call.address}  {call.status}"
+                for call in self.call_history
+            )
+            or "No calls recorded yet.",
+        )
+
+    def choose_default_account(self) -> None:
+        labels = [f"{account.label} — {account.username}" for account in self.accounts]
+        choice, accepted = QInputDialog.getItem(
+            self, "Default outbound account", "Account:", labels, editable=False
+        )
+        if accepted:
+            self.default_account_id = self.accounts[labels.index(choice)].identifier
+            self.store.save_default_account_id(self.default_account_id)
 
     def _record_call(self, address: str, direction: str, status: str) -> None:
         if not address.strip() or not self.accounts:

@@ -7,7 +7,9 @@ from jrvoiceapp.telephony.webrtc import WebRtcProvider
 
 
 class TelephonyController:
-    def route_outbound(self, accounts: list[AccountConfig], destination: str) -> AccountConfig:
+    def route_outbound(
+        self, accounts: list[AccountConfig], destination: str, default_id: str = ""
+    ) -> AccountConfig:
         """Choose predictably: explicit SIP domain match, then lexical account id."""
         if not accounts:
             raise ValueError("Configure an account before calling.")
@@ -15,7 +17,11 @@ class TelephonyController:
         matches = [
             account for account in accounts if account.server.lower().split(":")[0] == target_domain
         ]
-        return min(matches or accounts, key=lambda account: account.identifier)
+        candidates = matches or accounts
+        return next(
+            (item for item in candidates if item.identifier == default_id),
+            min(candidates, key=lambda account: account.identifier),
+        )
 
     def provider_for(self, account: AccountConfig, password: str) -> TelephonyProvider:
         account.validate()

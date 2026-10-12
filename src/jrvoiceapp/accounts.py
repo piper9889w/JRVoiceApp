@@ -105,3 +105,16 @@ class AccountStore:
         self.audio_settings_path.write_text(
             json.dumps({"input": input_device, "output": output_device}, indent=2), encoding="utf-8"
         )
+
+    @property
+    def routing_settings_path(self) -> Path:
+        return self.path.with_name("routing-settings.json")
+
+    def load_default_account_id(self) -> str:
+        if not self.routing_settings_path.exists():
+            return ""
+        return str(json.loads(self.routing_settings_path.read_text()).get("default_account_id", ""))
+
+    def save_default_account_id(self, account_id: str) -> None:
+        self.routing_settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self.routing_settings_path.write_text(json.dumps({"default_account_id": account_id}))
