@@ -9,6 +9,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from jrvoiceapp.models import AccountConfig
+from jrvoiceapp.pidflo import build_pidf_lo
 from jrvoiceapp.telephony.base import ProviderState, TelephonyProvider
 from jrvoiceapp.telephony.sipapp_core.audio_engine import AudioEngine
 from jrvoiceapp.telephony.sipapp_core.registration_manager import (
@@ -29,6 +30,8 @@ class SipAppProvider(TelephonyProvider):
         self.registration: RegistrationManager | None = None
         self.audio = AudioEngine()
         self.emergency_location = ""
+        self.pidf_lo_body = ""
+        self.geolocation_header = ""
 
     def _profile(self) -> dict[str, object]:
         value = self.account.server.strip()
@@ -168,6 +171,10 @@ class SipAppProvider(TelephonyProvider):
     def set_emergency_location(self, location: str) -> None:
         """Keep a verified session location without writing it to diagnostics."""
         self.emergency_location = location
+        if self.account.emergency.enabled:
+            self.pidf_lo_body, self.geolocation_header = build_pidf_lo(
+                location, f"sip:{self.account.username}@{self._profile()['domain']}"
+            )
         self._emit("emergency-location-verified")
 
     def stop(self) -> None:

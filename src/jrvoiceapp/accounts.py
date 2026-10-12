@@ -90,3 +90,18 @@ class AccountStore:
         path = self.emergency_settings_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
+
+    @property
+    def audio_settings_path(self) -> Path:
+        return self.path.with_name("audio-settings.json")
+
+    def load_audio_settings(self) -> dict[str, str]:
+        if not self.audio_settings_path.exists():
+            return {"input": "", "output": ""}
+        return {"input": "", "output": "", **json.loads(self.audio_settings_path.read_text())}
+
+    def save_audio_settings(self, input_device: str, output_device: str) -> None:
+        self.audio_settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self.audio_settings_path.write_text(
+            json.dumps({"input": input_device, "output": output_device}, indent=2), encoding="utf-8"
+        )

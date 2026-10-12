@@ -49,7 +49,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [x] Store secrets in the operating-system keychain, never plaintext settings.
 - [x] Add connection type selection: SIP or WebRTC.
 - [x] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
-- [~] Add per-account PIDF-LO support/location preferences and user-level emergency dial strings (saved locations, verification prompt, and temporary session location are implemented; PIDF-LO SIP transmission and carrier validation remain).
+- [~] Add per-account PIDF-LO support/location preferences and user-level emergency dial strings (saved locations, verification prompt, session PIDF-LO/Geolocation construction, and temporary session location are implemented; SIP transmission and carrier validation remain).
 
 ### 5. WebRTC calling
 
@@ -68,7 +68,7 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 7. Unified experience
 
-- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store and dialer integration are implemented; contact-management UI and live-provider completion states remain).
+- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store, basic contact add/dial UI, and active-line state are implemented; richer contact management and live-provider completion states remain).
 - [ ] Display account, codec, encryption, and call-quality status.
 - [ ] Define deterministic account-routing rules for outbound calls.
 - [~] Add per-account editable SIP/WebRTC INVITE and 200 OK templates plus reusable custom-header variables (SIPApp adapter applies SIP templates; WebRTC bridge configuration is ready pending runtime integration).

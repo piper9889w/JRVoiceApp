@@ -39,6 +39,7 @@ class MainWindow(QMainWindow):
         self.store = AccountStore()
         self.accounts = self.store.load()
         self.user_emergency_settings = self.store.load_user_emergency_settings()
+        self.audio_settings = self.store.load_audio_settings()
         self.records_store = RecordsStore()
         self.contacts, self.call_history = self.records_store.load()
         self.controller = TelephonyController()
@@ -117,6 +118,8 @@ class MainWindow(QMainWindow):
             button.setObjectName("nav")
             button.setCheckable(True)
             button.setChecked(label.endswith("Phone"))
+            if label.endswith("Contacts"):
+                button.clicked.connect(self.manage_contacts)
             layout.addWidget(button)
         settings = QPushButton("⚙  Settings")
         settings.setObjectName("nav")
@@ -283,9 +286,9 @@ class MainWindow(QMainWindow):
         name = QLabel("Marcus Chen")
         name.setObjectName("heading")
         layout.addWidget(name)
-        timer = QLabel("00:02:18     ▂▄▆█  Opus · Encrypted")
-        timer.setObjectName("online")
-        layout.addWidget(timer)
+        self.active_line_status = QLabel("No active call")
+        self.active_line_status.setObjectName("online")
+        layout.addWidget(self.active_line_status)
         controls = QGridLayout()
         for index, label in enumerate(
             ("♩\nMute", "⠿\nKeypad", "◖\nSpeaker", "⇄\nTransfer", "Ⅱ\nHold", "☎\nEnd call")
@@ -369,6 +372,9 @@ class MainWindow(QMainWindow):
                 account = self.accounts[0]
                 password = self.store.password_for(account.identifier)
                 self.provider = self.controller.provider_for(account, password)
+                if isinstance(self.provider, SipAppProvider):
+                    self.provider.audio.input_device = self.audio_settings["input"]
+                    self.provider.audio.output_device = self.audio_settings["output"]
                 self.provider.add_event_callback(self._on_provider_event)
                 self.provider.start()
             if (
@@ -442,6 +448,8 @@ class MainWindow(QMainWindow):
         if accepted:
             self.provider.audio.input_device = input_device
             self.provider.audio.output_device = output_device
+            self.audio_settings = {"input": input_device, "output": output_device}
+            self.store.save_audio_settings(input_device, output_device)
             self.statusBar().showMessage(
                 "Call devices will be used on the next media connection.", 6000
             )
@@ -461,7 +469,21 @@ class MainWindow(QMainWindow):
             self.show_incoming_call(caller, details.get("from", ""), live=True)
             return
         if event == "call-state":
+            self.active_line_status.setText(details.get("state", "Call update"))
             self.statusBar().showMessage(details.get("state", "Call update"), 5000)
+
+    def manage_contacts(self) -> None:
+        name, accepted = QInputDialog.getText(self, "Add contact", "Name:")
+        if not accepted or not name.strip():
+            return
+        address, accepted = QInputDialog.getText(self, "Add contact", "Number or SIP address:")
+        if not accepted or not address.strip():
+            return
+        from jrvoiceapp.records import Contact
+
+        self.contacts = [*self.contacts, Contact(name.strip(), address.strip())]
+        self.records_store.save(self.contacts, self.call_history)
+        self.dial_input.setText(address.strip())
 
     def _record_call(self, address: str, direction: str, status: str) -> None:
         if not address.strip() or not self.accounts:

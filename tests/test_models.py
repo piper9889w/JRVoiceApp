@@ -9,6 +9,7 @@ from jrvoiceapp.models import (
     UserEmergencySettings,
     WebRtcEngine,
 )
+from jrvoiceapp.pidflo import build_pidf_lo
 from jrvoiceapp.provisioning import (
     ProvisioningError,
     VoiceAdminClient,
@@ -235,3 +236,10 @@ def test_webrtc_runtime_document_keeps_credentials_out_of_lifecycle_events() -> 
     assert "jssip@" in document
     assert "sip.js@" in document
     assert "password" not in document
+
+
+def test_pidf_lo_escapes_location_and_constructs_a_geolocation_header() -> None:
+    body, header = build_pidf_lo("HQ <Floor 2>", "sip:1001@example.test")
+    assert "HQ &lt;Floor 2&gt;" in body
+    assert header.startswith("<cid:")
+    assert "routing-allowed=yes" in header
