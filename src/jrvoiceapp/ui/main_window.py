@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from jrvoiceapp.accounts import AccountStore
 from jrvoiceapp.models import SAMPLE_RECENT_CALLS
+from jrvoiceapp.records import CallRecord, RecordsStore
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.ui.account_dialog import AccountDialog
@@ -38,6 +39,8 @@ class MainWindow(QMainWindow):
         self.store = AccountStore()
         self.accounts = self.store.load()
         self.user_emergency_settings = self.store.load_user_emergency_settings()
+        self.records_store = RecordsStore()
+        self.contacts, self.call_history = self.records_store.load()
         self.controller = TelephonyController()
         self.provider = None
         self.dial_input = QLineEdit()
@@ -230,22 +233,42 @@ class MainWindow(QMainWindow):
         title.addStretch()
         title.addWidget(QLabel("See all  ›"))
         layout.addLayout(title)
-        for call in SAMPLE_RECENT_CALLS:
+        records = self.call_history[:5]
+        for call in records or SAMPLE_RECENT_CALLS:
+            if isinstance(call, CallRecord):
+                caller = next(
+                    (item.name for item in self.contacts if item.address == call.address),
+                    call.address,
+                )
+                initials = "".join(word[0] for word in caller.split()[:2]).upper() or "?"
+                direction, when, accent = (
+                    call.direction,
+                    call.occurred_at[:16].replace("T", " "),
+                    "#3478f6",
+                )
+            else:
+                caller, initials, direction, when, accent = (
+                    call.caller,
+                    call.initials,
+                    call.direction,
+                    call.time_label,
+                    call.accent,
+                )
             row = QHBoxLayout()
-            avatar = QLabel(call.initials)
+            avatar = QLabel(initials)
             avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
             avatar.setFixedSize(42, 42)
-            avatar.setStyleSheet(f"background:{call.accent};border-radius:21px;font-weight:700;")
+            avatar.setStyleSheet(f"background:{accent};border-radius:21px;font-weight:700;")
             row.addWidget(avatar)
             info = QVBoxLayout()
-            info.addWidget(QLabel(call.caller))
-            detail = QLabel(call.direction)
+            info.addWidget(QLabel(caller))
+            detail = QLabel(direction)
             detail.setObjectName("subtle")
             info.addWidget(detail)
             row.addLayout(info, 1)
-            when = QLabel(call.time_label)
-            when.setObjectName("subtle")
-            row.addWidget(when)
+            when_label = QLabel(when)
+            when_label.setObjectName("subtle")
+            row.addWidget(when_label)
             layout.addLayout(row)
         return panel
 
@@ -354,6 +377,7 @@ class MainWindow(QMainWindow):
             ):
                 return
             self.provider.dial(self.dial_input.text())
+            self._record_call(self.dial_input.text(), "Outgoing", "Dialing")
         except (KeyringError, OSError, RuntimeError, ValueError) as error:
             self.statusBar().showMessage(str(error), 8000)
 
@@ -433,10 +457,26 @@ class MainWindow(QMainWindow):
             return
         if event == "call-state" and details.get("state") == "INCOMING_CALL":
             caller = details.get("caller", "Unknown caller")
+            self._record_call(details.get("from", caller), "Incoming", "Ringing")
             self.show_incoming_call(caller, details.get("from", ""), live=True)
             return
         if event == "call-state":
             self.statusBar().showMessage(details.get("state", "Call update"), 5000)
+
+    def _record_call(self, address: str, direction: str, status: str) -> None:
+        if not address.strip() or not self.accounts:
+            return
+        self.call_history = self.records_store.add_call(
+            self.contacts,
+            self.call_history,
+            CallRecord(
+                address.strip(),
+                direction,
+                status,
+                self.records_store.now(),
+                self.accounts[0].identifier,
+            ),
+        )
 
     def show_incoming_call(
         self, caller: str = "Marcus Chen", number: str = "Extension 1002", live: bool = False

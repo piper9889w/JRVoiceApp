@@ -15,6 +15,7 @@ from jrvoiceapp.provisioning import (
     map_profile,
     normalize_base_url,
 )
+from jrvoiceapp.records import CallRecord, Contact, RecordsStore
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.telephony.sipapp_core.sip_engine import (
@@ -23,6 +24,7 @@ from jrvoiceapp.telephony.sipapp_core.sip_engine import (
     SIPMessage,
 )
 from jrvoiceapp.telephony.webrtc import WebRtcProvider
+from jrvoiceapp.telephony.webrtc_bridge import runtime_document
 
 
 def test_connection_labels_match_the_phone_ui() -> None:
@@ -216,3 +218,20 @@ def test_voiceadmin_retries_transient_network_failures(monkeypatch: pytest.Monke
     monkeypatch.setattr(client, "_fetch_once", fetch_once)
     assert client.fetch(retries=2) == {"username": "1001"}
     assert calls == 3
+
+
+def test_unified_records_store_persists_contacts_and_calls(tmp_path) -> None:
+    store = RecordsStore(tmp_path / "records.json")
+    contacts = [Contact("Marcus Chen", "1002")]
+    calls = store.add_call(
+        contacts, [], CallRecord("1002", "Outgoing", "Dialing", "2026-10-12T12:00:00+00:00", "desk")
+    )
+    assert store.load() == (contacts, calls)
+
+
+def test_webrtc_runtime_document_keeps_credentials_out_of_lifecycle_events() -> None:
+    document = runtime_document()
+    assert "runtime-loading" in document
+    assert "jssip@" in document
+    assert "sip.js@" in document
+    assert "password" not in document

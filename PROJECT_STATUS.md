@@ -11,7 +11,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
 | Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
 | SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; provider registration, call-state, RTP/G.711 audio, UI/tray events, and non-secret diagnostics are integrated but not live-PBX verified. |
-| WebRTC calling | In progress | SIP.js/JsSIP provider boundary and secure-WSS validation are implemented; the embedded runtime bridge remains next. |
+| WebRTC calling | In progress; live validation pending | SIP.js/JsSIP provider boundary, embedded WebEngine runtime loader, and secure-WSS validation are implemented; real WSS/TURN registration and media remain unverified. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
 | Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password/provisioning-secret boundary, VoiceAdmin profile refresh, and SIP/WebRTC engine settings. |
 | Releases | Planned | No installers have been built. |
@@ -53,8 +53,8 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 5. WebRTC calling
 
-- [~] Implement SIP.js as the recommended WSS/WebRTC engine.
-- [~] Implement JsSIP as an alternate selectable engine.
+- [~] Implement SIP.js as the recommended WSS/WebRTC engine (embedded runtime loader and event boundary are implemented; WSS/TURN registration and media are not live-validated).
+- [~] Implement JsSIP as an alternate selectable engine (embedded runtime loader and event boundary are implemented; WSS/TURN registration and media are not live-validated).
 - [x] Document and enforce the limited experimental aiortc path.
 - [ ] Add microphone, speaker, codec, ICE, and TURN diagnostics.
 
@@ -68,7 +68,7 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 7. Unified experience
 
-- [ ] Combine SIP and WebRTC history, contacts, dialer, and presence.
+- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store and dialer integration are implemented; contact-management UI and live-provider completion states remain).
 - [ ] Display account, codec, encryption, and call-quality status.
 - [ ] Define deterministic account-routing rules for outbound calls.
 - [~] Add per-account editable SIP/WebRTC INVITE and 200 OK templates plus reusable custom-header variables (SIPApp adapter applies SIP templates; WebRTC bridge configuration is ready pending runtime integration).
