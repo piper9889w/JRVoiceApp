@@ -13,7 +13,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; provider registration, call-state, RTP/G.711 audio, UI/tray events, and non-secret diagnostics are integrated but not live-PBX verified. |
 | WebRTC calling | In progress | SIP.js/JsSIP provider boundary and secure-WSS validation are implemented; the embedded runtime bridge remains next. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
-| Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password boundary, and SIP/WebRTC engine settings. |
+| Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password/provisioning-secret boundary, VoiceAdmin profile refresh, and SIP/WebRTC engine settings. |
 | Releases | Planned | No installers have been built. |
 
 ## Delivery checklist
@@ -45,7 +45,7 @@ This is the shared working checklist for the project. Update it in the same pull
 ### 4. Accounts and secure configuration
 
 - [x] Add the initial account add/edit flow.
-- [ ] Add manual setup and provisioning-server enrollment.
+- [~] Add manual setup and provisioning-server enrollment (VoiceAdmin version-1 download, mapping, refresh, retry, and safe errors are implemented; target VoiceAdmin deployment validation remains).
 - [x] Store secrets in the operating-system keychain, never plaintext settings.
 - [x] Add connection type selection: SIP or WebRTC.
 - [x] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
@@ -75,9 +75,7 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 8. Provisioning integration
 
-- [ ] Implement the existing VoiceAdmin HTTP Basic profile download flow.
-- [ ] Map provisioned fields to JRVoiceApp account settings.
-- [ ] Add refresh, retry, and safe error messages.
+- [~] Implement the existing VoiceAdmin HTTP Basic profile download flow (version-1 profile download, account mapping, refresh, bounded retry, and safe errors are implemented; target VoiceAdmin deployment validation remains).
 
 ### 9. Packaging and verification
 

@@ -9,6 +9,12 @@ from jrvoiceapp.models import (
     UserEmergencySettings,
     WebRtcEngine,
 )
+from jrvoiceapp.provisioning import (
+    ProvisioningError,
+    VoiceAdminClient,
+    map_profile,
+    normalize_base_url,
+)
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
 from jrvoiceapp.telephony.sipapp_core.sip_engine import (
@@ -150,3 +156,63 @@ def test_sipapp_diagnostics_redacts_credentials() -> None:
     assert report["transport"] == "UDP"
     assert "Registration ready" in report["events"][0]
     assert "do-not-expose" not in str(report)
+
+
+def test_voiceadmin_profile_maps_to_a_sip_account_without_persisting_its_secret() -> None:
+    existing = AccountConfig(
+        "id",
+        "Old label",
+        "1000",
+        "old.example",
+        ConnectionKind.SIP,
+        provisioning_server="https://voice.example/admin",
+    )
+    profile = map_profile(
+        {
+            "username": "1001",
+            "displayName": "Desk 1001",
+            "server": "sip.example:5061",
+            "transport": "TLS",
+            "voicemail": "*98",
+            "sipPassword": "temporary-secret",
+        },
+        existing,
+    )
+    assert profile.account.identifier == "id"
+    assert profile.account.server == "sip.example:5061"
+    assert profile.account.connection_kind is ConnectionKind.SIP
+    assert profile.sip_password == "temporary-secret"
+    assert "temporary-secret" not in str(profile.account)
+
+
+def test_voiceadmin_rejects_unsafe_urls_and_invalid_transport() -> None:
+    with pytest.raises(ProvisioningError, match="must not include credentials"):
+        normalize_base_url("https://user:password@voice.example")
+    existing = AccountConfig("id", "Desk", "1000", "old.example", ConnectionKind.SIP)
+    with pytest.raises(ProvisioningError, match="only TLS"):
+        map_profile(
+            {
+                "username": "1001",
+                "displayName": "Desk",
+                "server": "sip.example",
+                "transport": "SCTP",
+                "voicemail": "*97",
+            },
+            existing,
+        )
+
+
+def test_voiceadmin_retries_transient_network_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = VoiceAdminClient("https://voice.example", "desk-1001", "provisioning-secret")
+    calls = 0
+
+    def fetch_once() -> dict[str, str]:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise ProvisioningError("Could not reach the provisioning server.")
+        return {"username": "1001"}
+
+    monkeypatch.setattr(client, "_fetch_once", fetch_once)
+    assert client.fetch(retries=2) == {"username": "1001"}
+    assert calls == 3

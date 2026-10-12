@@ -64,6 +64,17 @@ class AccountStore:
         """Read a password only when a provider is being started."""
         return keyring.get_password(KEYRING_SERVICE, account_id) or ""
 
+    def save_provisioning_credentials(self, account_id: str, username: str, password: str) -> None:
+        """Keep VoiceAdmin credentials out of the accounts JSON file."""
+        keyring.set_password(KEYRING_SERVICE, f"provisioning-username:{account_id}", username)
+        keyring.set_password(KEYRING_SERVICE, f"provisioning-password:{account_id}", password)
+
+    def provisioning_credentials_for(self, account_id: str) -> tuple[str, str]:
+        return (
+            keyring.get_password(KEYRING_SERVICE, f"provisioning-username:{account_id}") or "",
+            keyring.get_password(KEYRING_SERVICE, f"provisioning-password:{account_id}") or "",
+        )
+
     @property
     def emergency_settings_path(self) -> Path:
         return self.path.with_name("emergency-settings.json")

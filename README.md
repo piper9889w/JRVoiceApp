@@ -37,6 +37,7 @@ On Windows, activate the virtual environment with `.venv\\Scripts\\activate` bef
 - Per-account editable SIP and WebRTC `INVITE` and inbound `200 OK` templates
 - Reusable non-secret SIP custom-header variables for provider-specific `X-` headers
 - Per-account PIDF-LO/emergency-dialing support setting, five saved locations, and verification prompts
+- VoiceAdmin version-1 profile download and refresh, with provisioning credentials stored in the OS keychain
 - User-level configurable emergency dial strings for regional and office dialing plans
 
 See [the roadmap](docs/ROADMAP.md), [architecture notes](docs/ARCHITECTURE.md), and the editable [project status checklist](PROJECT_STATUS.md) for the planned implementation boundaries.

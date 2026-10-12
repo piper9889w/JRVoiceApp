@@ -26,6 +26,7 @@ from jrvoiceapp.models import (
     WebRtcEngine,
 )
 from jrvoiceapp.ui.emergency_dialog import EmergencySettingsDialog
+from jrvoiceapp.ui.provisioning_dialog import ProvisioningDialog
 from jrvoiceapp.ui.signaling_dialog import SignalingDialog
 
 
@@ -34,10 +35,13 @@ class AccountDialog(QDialog):
         self,
         account: AccountConfig | None = None,
         user_emergency_settings: UserEmergencySettings | None = None,
+        provisioning_credentials: tuple[str, str] = ("", ""),
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.account = account
+        self.identifier = account.identifier if account else str(uuid4())
+        self.provisioning_credentials = provisioning_credentials
         self.signaling = account.signaling if account else None
         self.emergency = account.emergency if account else EmergencyConfig()
         self.user_emergency_settings = user_emergency_settings or UserEmergencySettings()
@@ -86,6 +90,9 @@ class AccountDialog(QDialog):
         emergency_button = QPushButton("Emergency dialing and location…")
         emergency_button.clicked.connect(self.open_emergency_dialog)
         layout.addWidget(emergency_button)
+        provisioning_button = QPushButton("Provision from VoiceAdmin…")
+        provisioning_button.clicked.connect(self.open_provisioning_dialog)
+        layout.addWidget(provisioning_button)
         self.engine_select.setToolTip(
             "SIP.js is recommended. JsSIP is an alternate engine. aiortc is experimental."
         )
@@ -111,7 +118,7 @@ class AccountDialog(QDialog):
 
     def result_account(self) -> AccountConfig:
         return AccountConfig(
-            identifier=self.account.identifier if self.account else str(uuid4()),
+            identifier=self.identifier,
             label=self.label_input.text().strip(),
             username=self.username_input.text().strip(),
             server=self.server_input.text().strip(),
@@ -120,6 +127,7 @@ class AccountDialog(QDialog):
             voicemail_number=self.voicemail_input.text().strip() or "*97",
             signaling=self.signaling or SignalingTemplates(),
             emergency=self.emergency,
+            provisioning_server=self.account.provisioning_server if self.account else "",
         )
 
     def open_signaling_dialog(self) -> None:
@@ -131,3 +139,18 @@ class AccountDialog(QDialog):
         dialog = EmergencySettingsDialog(self.emergency, self.user_emergency_settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.emergency, self.user_emergency_settings = dialog.result_values()
+
+    def open_provisioning_dialog(self) -> None:
+        candidate = self.result_account()
+        dialog = ProvisioningDialog(candidate, *self.provisioning_credentials, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.provisioned is None:
+            return
+        profile = dialog.provisioned
+        self.label_input.setText(profile.account.label)
+        self.username_input.setText(profile.account.username)
+        self.server_input.setText(profile.account.server)
+        self.kind_select.setCurrentText(ConnectionKind.SIP.value)
+        self.voicemail_input.setText(profile.account.voicemail_number)
+        self.password_input.setText(profile.sip_password)
+        self.account = profile.account
+        self.provisioning_credentials = (dialog.username_input.text(), dialog.password_input.text())

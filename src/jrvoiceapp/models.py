@@ -83,6 +83,7 @@ class AccountConfig:
     voicemail_number: str = "*97"
     signaling: SignalingTemplates = field(default_factory=SignalingTemplates)
     emergency: EmergencyConfig = field(default_factory=EmergencyConfig)
+    provisioning_server: str = ""
 
     def validate(self) -> None:
         if not self.identifier.strip() or not self.label.strip():

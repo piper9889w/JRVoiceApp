@@ -295,7 +295,10 @@ class MainWindow(QMainWindow):
 
     def open_account_dialog(self) -> None:
         account = self.accounts[0] if self.accounts else None
-        dialog = AccountDialog(account, self.user_emergency_settings, self)
+        credentials = (
+            self.store.provisioning_credentials_for(account.identifier) if account else ("", "")
+        )
+        dialog = AccountDialog(account, self.user_emergency_settings, credentials, self)
         if dialog.exec() != AccountDialog.DialogCode.Accepted:
             return
         result = dialog.result_account()
@@ -309,6 +312,10 @@ class MainWindow(QMainWindow):
             self.store.save_user_emergency_settings(self.user_emergency_settings)
             if dialog.password_input.text():
                 self.store.save_password(result.identifier, dialog.password_input.text())
+            if result.provisioning_server:
+                self.store.save_provisioning_credentials(
+                    result.identifier, *dialog.provisioning_credentials
+                )
         except (KeyringError, OSError, ValueError) as error:
             QMessageBox.critical(self, "Could not save account", str(error))
             return
