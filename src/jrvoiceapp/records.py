@@ -63,6 +63,19 @@ class RecordsStore:
         self.save(contacts, updated)
         return updated
 
+    def update_latest(
+        self, contacts: list[Contact], calls: list[CallRecord], account_id: str, status: str
+    ) -> list[CallRecord]:
+        for index, call in enumerate(calls):
+            if call.account_id == account_id:
+                calls = [*calls]
+                calls[index] = CallRecord(
+                    call.address, call.direction, status, call.occurred_at, account_id
+                )
+                self.save(contacts, calls)
+                break
+        return calls
+
     @staticmethod
     def now() -> str:
         return datetime.now(UTC).isoformat()

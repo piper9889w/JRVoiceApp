@@ -34,6 +34,8 @@ class WebRtcProvider(TelephonyProvider):
             dict(account.signaling.header_variables),
         )
         self.bridge: EmbeddedWebRtcBridge | None = None
+        self.runtime_status = "not started"
+        self.runtime_events: list[str] = []
 
     def start(self) -> None:
         if self.account.web_rtc_engine is WebRtcEngine.AIORTC:
@@ -65,7 +67,22 @@ class WebRtcProvider(TelephonyProvider):
             self.bridge = None
         self.state = ProviderState.IDLE
 
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "provider_state": self.state.value,
+            "engine": self.account.web_rtc_engine.value,
+            "websocket": self.account.server,
+            "runtime": self.runtime_status,
+            "events": self.runtime_events[-20:],
+            "ice": "not reported by runtime",
+            "turn": "not reported by runtime",
+        }
+
     def _on_bridge_event(self, event: str, details: dict[str, str]) -> None:
+        self.runtime_status = event
+        self.runtime_events.append(
+            event + (f": {details.get('summary')}" if details.get("summary") else "")
+        )
         if event == "registered":
             self.state = ProviderState.REGISTERED
         elif event == "runtime-error":

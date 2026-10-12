@@ -348,7 +348,7 @@ class MainWindow(QMainWindow):
         self._refresh_account_label()
 
     def open_diagnostics(self) -> None:
-        if isinstance(self.provider, SipAppProvider):
+        if self.provider and hasattr(self.provider, "diagnostics"):
             dialog = DiagnosticsDialog(self.provider.diagnostics, self)
         else:
             dialog = DiagnosticsDialog(
@@ -369,7 +369,7 @@ class MainWindow(QMainWindow):
             return
         try:
             if self.provider is None:
-                account = self.accounts[0]
+                account = self.controller.route_outbound(self.accounts, self.dial_input.text())
                 password = self.store.password_for(account.identifier)
                 self.provider = self.controller.provider_for(account, password)
                 if isinstance(self.provider, SipAppProvider):
@@ -470,6 +470,13 @@ class MainWindow(QMainWindow):
             return
         if event == "call-state":
             self.active_line_status.setText(details.get("state", "Call update"))
+            if details.get("state") in {"CONNECTED", "TERMINATED"} and self.accounts:
+                self.call_history = self.records_store.update_latest(
+                    self.contacts,
+                    self.call_history,
+                    self.accounts[0].identifier,
+                    details["state"].title(),
+                )
             self.statusBar().showMessage(details.get("state", "Call update"), 5000)
 
     def manage_contacts(self) -> None:

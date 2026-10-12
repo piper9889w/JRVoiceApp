@@ -243,3 +243,18 @@ def test_pidf_lo_escapes_location_and_constructs_a_geolocation_header() -> None:
     assert "HQ &lt;Floor 2&gt;" in body
     assert header.startswith("<cid:")
     assert "routing-allowed=yes" in header
+
+
+def test_outbound_routing_prefers_explicit_domain_then_stable_identifier() -> None:
+    controller = TelephonyController()
+    alpha = AccountConfig("a", "Alpha", "1001", "alpha.example", ConnectionKind.SIP)
+    bravo = AccountConfig("b", "Bravo", "1002", "bravo.example", ConnectionKind.SIP)
+    assert controller.route_outbound([bravo, alpha], "1003") is alpha
+    assert controller.route_outbound([alpha, bravo], "sip:1003@bravo.example") is bravo
+
+
+def test_webrtc_diagnostics_are_safe_and_do_not_include_password() -> None:
+    account = AccountConfig("id", "Web", "1001", "wss://pbx.example/sip", ConnectionKind.WEBRTC)
+    report = WebRtcProvider(account, "secret").diagnostics()
+    assert report["ice"] == "not reported by runtime"
+    assert "secret" not in str(report)

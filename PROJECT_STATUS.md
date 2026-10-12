@@ -56,7 +56,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [~] Implement SIP.js as the recommended WSS/WebRTC engine (embedded runtime loader and event boundary are implemented; WSS/TURN registration and media are not live-validated).
 - [~] Implement JsSIP as an alternate selectable engine (embedded runtime loader and event boundary are implemented; WSS/TURN registration and media are not live-validated).
 - [x] Document and enforce the limited experimental aiortc path.
-- [ ] Add microphone, speaker, codec, ICE, and TURN diagnostics.
+- [~] Add microphone, speaker, codec, ICE, and TURN diagnostics (safe WebRTC runtime/WSS/ICE/TURN availability diagnostics are exposed; live device/media metrics require runtime validation).
 
 ### 6. Traditional SIP calling
 
@@ -68,9 +68,9 @@ This is the shared working checklist for the project. Update it in the same pull
 
 ### 7. Unified experience
 
-- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store, basic contact add/dial UI, and active-line state are implemented; richer contact management and live-provider completion states remain).
+- [~] Combine SIP and WebRTC history, contacts, dialer, and presence (persisted local unified history/contact store, basic contact add/dial UI, active-line state, and SIP terminal-state history updates are implemented; richer contact management and live-provider completion states remain).
 - [ ] Display account, codec, encryption, and call-quality status.
-- [ ] Define deterministic account-routing rules for outbound calls.
+- [~] Define deterministic account-routing rules for outbound calls (explicit SIP-domain match, then stable account-ID ordering; multi-account UI selection remains).
 - [~] Add per-account editable SIP/WebRTC INVITE and 200 OK templates plus reusable custom-header variables (SIPApp adapter applies SIP templates; WebRTC bridge configuration is ready pending runtime integration).
 
 ### 8. Provisioning integration
