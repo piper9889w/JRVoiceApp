@@ -71,10 +71,10 @@ asks the user to confirm the default or another saved location, or to provide
 a temporary location for the current session. An emergency call similarly
 requires that confirmation.
 
-This is a safety UI/configuration foundation only. The current SIPApp transport
-does **not** yet construct or transmit a standards-compliant PIDF-LO body or
-Geolocation header. Do not rely on it for emergency location delivery until
-that protocol work has been implemented and validated with the carrier/PBX.
+The app now constructs a civic-address PIDF-LO document and Geolocation header
+after confirmation, but the current SIPApp transport does **not** transmit them.
+Do not rely on it for emergency location delivery until that protocol work has
+been implemented and validated with the carrier/PBX.
 
 ## WebRTC requirements
 

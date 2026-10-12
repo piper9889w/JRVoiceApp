@@ -1,9 +1,9 @@
 # JRVoiceApp continuation handoff
 
-**Prepared:** 2026-10-11  
+**Prepared:** 2026-10-12
 **Repository:** `piper9889w/JRVoiceApp`  
 **Branch:** `main`  
-**Latest commit:** `2eda445 Add safe SIP diagnostics panel`  
+**Latest commit:** `81a2a1c Expand contacts history and routing UI`
 **Repository state:** clean and pushed to `origin/main`
 
 ## Read before changing anything
@@ -17,9 +17,10 @@
 
 ## Current implementation
 
-- The PySide6 desktop shell has accounts, OS-keychain password storage, tray
-  behavior, incoming-call UI, signaling-template editor, emergency-location
-  preferences, active-call controls, and a safe diagnostics panel.
+- The PySide6 desktop shell has accounts, OS-keychain password/provisioning
+  storage, tray behavior, incoming-call UI, signaling templates, VoiceAdmin
+  provisioning, contacts, unified history, active-call status, audio preferences,
+  default routing, and safe diagnostics.
 - SIPApp source is maintained in-tree from upstream commit
   `8464088e4b88761bf1fcfd6a34689f83081e32ba`. Its upstream repository had no
   declared license; see `src/jrvoiceapp/telephony/sipapp_core/SIPAPP_PROVENANCE.md`.
@@ -31,21 +32,18 @@
 - The diagnostics panel intentionally shows only redacted, summary-level data.
   Never put passwords, authorization data, raw SIP content, or media keys into
   UI logs or settings.
-- Editable SIP/WebRTC INVITE and 200 OK templates plus `X-` header variables
-  are persisted. SIP applies them now; WebRTC stores them for the future bridge.
-- Emergency locations and configurable dial strings are a UI/configuration
-  foundation only. PIDF-LO/Geolocation SIP transmission is not implemented.
+- The embedded WebEngine WebRTC runtime loads SIP.js or JsSIP and returns safe
+  lifecycle summaries. It is not live WSS/TURN/media validated.
+- PIDF-LO XML and a Geolocation header are constructed after location confirmation,
+  but are not transmitted or carrier validated.
 
 ## Suggested next work without a PBX
 
-1. Implement VoiceAdmin provisioning: profile download, mapping into account
-   settings, refresh/retry, and safe error handling.
-2. Add persistent unified call history and contacts to replace sample data.
-3. Build the embedded SIP.js/JsSIP WebRTC runtime bridge, then surface its
-   events through the existing controller/UI interfaces.
-4. Add real PIDF-LO document and Geolocation-header construction behind the
-   existing account setting, without claiming carrier interoperability.
-5. Add durable audio-device preferences and richer active-line status.
+1. Test SIP and WebRTC end-to-end against the target staging infrastructure.
+2. Finish WebRTC runtime registration/call event wiring and bundle approved JS
+   assets rather than relying on CDN runtime loading.
+3. Add a per-call account picker and richer contact/history search.
+4. Transmit PIDF-LO only after carrier/PBX requirements are known and test it.
 
 ## Verification baseline
 
@@ -58,7 +56,7 @@ PYTHONPATH=src .venv311/bin/python -m pytest -q
 git diff --check
 ```
 
-At this handoff, formatting and lint pass and **14 tests pass**. An offscreen
+At this handoff, formatting and lint pass and **22 tests pass**. An offscreen
 Qt smoke test may depend on local Qt platform-plugin setup; do not report it as
 passing unless it actually initializes in the current environment.
 
