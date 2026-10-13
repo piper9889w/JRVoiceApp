@@ -13,7 +13,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; provider registration, call-state, RTP/G.711 audio, UI/tray events, and non-secret diagnostics are integrated but not live-PBX verified. |
 | WebRTC calling | In progress; live validation pending | SIP.js/JsSIP provider boundary, embedded WebEngine runtime loader, and secure-WSS validation are implemented; real WSS/TURN registration and media remain unverified. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
-| Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password/provisioning-secret boundary, VoiceAdmin profile refresh, and SIP/WebRTC engine settings. |
+| Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password/provisioning-secret boundary, VoiceAdmin profile refresh, SIP transport selection, and legacy-account migration with pre-migration backup. |
 | Releases | Planned | No installers have been built. |
 
 ## Delivery checklist
@@ -47,7 +47,7 @@ This is the shared working checklist for the project. Update it in the same pull
 - [x] Add the initial account add/edit flow.
 - [~] Add manual setup and provisioning-server enrollment (VoiceAdmin version-1 download, mapping, refresh, retry, and safe errors are implemented; target VoiceAdmin deployment validation remains).
 - [x] Store secrets in the operating-system keychain, never plaintext settings.
-- [x] Add connection type selection: SIP or WebRTC.
+- [x] Add connection type selection: SIP or WebRTC, including SIP UDP/TCP/TLS transport selection and legacy TLS-label migration.
 - [x] Add WebRTC-engine selection: SIP.js, JsSIP, or experimental aiortc.
 - [~] Add per-account PIDF-LO support/location preferences and user-level emergency dial strings (saved locations, verification prompt, session PIDF-LO/Geolocation construction, and temporary session location are implemented; SIP transmission and carrier validation remain).
 
@@ -62,7 +62,7 @@ This is the shared working checklist for the project. Update it in the same pull
 
 - [x] Record the SIP implementation decision: continue from SIPApp source in this project.
 - [x] Bring the approved SIPApp source into JRVoiceApp and create the maintained integration boundary (source commit `8464088`; no upstream license declaration, recorded in provenance).
-- [~] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage (TLS registration/call adapter is implemented; target-PBX validation and TCP/UDP account selection remain).
+- [~] Add SIP TLS/TCP/UDP registration and call setup using that SIPApp lineage (transport selection and pre-SDP RTP socket binding are implemented; target-PBX validation remains).
 - [~] Add audio-device selection, DTMF, hold, transfer, and voicemail (SIPApp RTP/G.711 audio and voicemail dialing are integrated; desktop controls now issue SIP INFO DTMF, UPDATE hold/resume, and REFER transfer, plus mute/speaker/device selection. All require target-PBX validation.)
 - [~] Add certificate validation and useful network error reporting (TLS verification, a redacted desktop diagnostics panel, RTP/jitter/audio metrics, and recent SIP-event summaries are wired; real certificate/network scenarios remain to be tested).
 

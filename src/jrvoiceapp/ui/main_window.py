@@ -1,7 +1,7 @@
 """The desktop shell shown before protocol engines are connected."""
 
 from keyring.errors import KeyringError
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         self.contacts, self.call_history = self.records_store.load()
         self.controller = TelephonyController()
         self.provider = None
+        self.active_call_details: dict[str, str] = {}
         self.dial_input = QLineEdit()
         self.dial_input.setAccessibleName("Dial a name or number")
         self.dial_input.setPlaceholderText("Name or number")
@@ -62,6 +63,9 @@ class MainWindow(QMainWindow):
         self._quitting = False
         self._build_tray()
         self._refresh_account_label()
+        self.active_line_timer = QTimer(self)
+        self.active_line_timer.timeout.connect(self._refresh_active_line)
+        self.active_line_timer.start(1000)
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(
@@ -143,11 +147,10 @@ class MainWindow(QMainWindow):
         secure = QFrame()
         secure.setObjectName("panel")
         secure_layout = QVBoxLayout(secure)
-        secure_layout.addWidget(QLabel("▣  Secure connection"))
-        for connection in ("✓  SIP TLS", "✓  WebRTC WSS"):
-            chip = QLabel(connection)
-            chip.setObjectName("online")
-            secure_layout.addWidget(chip)
+        secure_layout.addWidget(QLabel("▣  Connection security"))
+        self.connection_security = QLabel("No active account")
+        self.connection_security.setObjectName("subtle")
+        secure_layout.addWidget(self.connection_security)
         layout.addWidget(secure)
         return panel
 
@@ -290,11 +293,13 @@ class MainWindow(QMainWindow):
         title = QLabel("Active line")
         title.setObjectName("section")
         layout.addWidget(title)
-        name = QLabel("Marcus Chen")
-        name.setObjectName("heading")
-        layout.addWidget(name)
+        self.active_line_name = QLabel("No active call")
+        self.active_line_name.setObjectName("heading")
+        self.active_line_name.setWordWrap(True)
+        layout.addWidget(self.active_line_name)
         self.active_line_status = QLabel("No active call")
         self.active_line_status.setObjectName("online")
+        self.active_line_status.setWordWrap(True)
         layout.addWidget(self.active_line_status)
         controls = QGridLayout()
         for index, label in enumerate(
@@ -318,6 +323,8 @@ class MainWindow(QMainWindow):
                 button.setCheckable(True)
                 button.clicked.connect(self.toggle_hold)
             controls.addWidget(button, index // 3, index % 3)
+        for column in range(3):
+            controls.setColumnStretch(column, 1)
         layout.addLayout(controls)
         return panel
 
@@ -367,8 +374,23 @@ class MainWindow(QMainWindow):
         if self.accounts:
             account = self.accounts[0]
             self.account_label.setText(f"●  {account.label}\n    {account.username}")
+            if account.connection_kind.value == "SIP":
+                if account.sip_transport.value == "TLS":
+                    self.connection_security.setText("SIP signaling: TLS verified")
+                    self.connection_security.setObjectName("online")
+                else:
+                    self.connection_security.setText(
+                        f"SIP signaling: {account.sip_transport.value} (not encrypted)"
+                    )
+                    self.connection_security.setObjectName("subtle")
+            else:
+                self.connection_security.setText("WebRTC signaling: WSS")
+                self.connection_security.setObjectName("online")
+            self.connection_security.style().unpolish(self.connection_security)
+            self.connection_security.style().polish(self.connection_security)
         else:
             self.account_label.setText("●  No account configured")
+            self.connection_security.setText("No active account")
 
     def place_call(self) -> None:
         if not self.accounts:
@@ -478,7 +500,16 @@ class MainWindow(QMainWindow):
             self.show_incoming_call(caller, details.get("from", ""), live=True)
             return
         if event == "call-state":
-            self.active_line_status.setText(details.get("state", "Call update"))
+            state = details.get("state", "Call update")
+            if state == "DIALING":
+                self.active_call_details = details
+            elif state == "CONNECTED":
+                self.active_call_details.update(details)
+            elif state == "TERMINATED":
+                self.active_call_details = {}
+                self.active_line_name.setText("No active call")
+                self.active_line_status.setText("No active call")
+            self._refresh_active_line()
             if details.get("state") in {"CONNECTED", "TERMINATED"} and self.accounts:
                 self.call_history = self.records_store.update_latest(
                     self.contacts,
@@ -488,12 +519,31 @@ class MainWindow(QMainWindow):
                 )
             self.statusBar().showMessage(details.get("state", "Call update"), 5000)
         if event == "media":
-            self.active_line_status.setText(
-                " · ".join(
-                    value for value in (details.get("codec"), details.get("remote")) if value
-                )
-                or "Media active"
-            )
+            self._refresh_active_line()
+
+    def _refresh_active_line(self) -> None:
+        """Render live, non-secret SIP call and media state in the active-line card."""
+        if not isinstance(self.provider, SipAppProvider) or not self.active_call_details:
+            return
+        state = self.active_call_details.get("state", "Call update")
+        if state not in {"CONNECTED", "HELD"}:
+            self.active_line_status.setText(state)
+            return
+        from_header = self.active_call_details.get("from", "")
+        request_uri = self.active_call_details.get("request_uri") or self.active_call_details.get(
+            "target", ""
+        )
+        self.active_line_name.setText(from_header or request_uri or "Active call")
+        report = self.provider.diagnostics()
+        destination = request_uri or "—"
+        signaling = report.get("signaling_destination", "—")
+        packets = report.get("rtp_packets", "TX 0 / RX 0")
+        packet_rate = report.get("rtp_packet_rate", "TX 0/s / RX 0/s")
+        rtp = report.get("rtp_remote", "—")
+        self.active_line_status.setText(
+            f"{state}\nRURI: {destination}\nSignaling: {signaling}\nRTP: {rtp}\n"
+            f"Packets: {packet_rate} ({packets})"
+        )
 
     def manage_contacts(self) -> None:
         choices = ["Add", "Dial", "Edit", "Delete"]

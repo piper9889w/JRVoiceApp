@@ -20,7 +20,7 @@ QPushButton#dial { min-width: 68px; min-height: 56px; border-radius: 34px; font-
 QPushButton#dial:hover { background: #203a5f; }
 QPushButton#call { min-width: 85px; min-height: 62px; border: 0; border-radius: 37px; background: #1975f3; font-size: 27px; }
 QPushButton#call:hover { background: #3186ff; }
-QPushButton#end { background: #ed3157; border: 0; border-radius: 26px; font-size: 22px; }
+QPushButton#end { background: #ed3157; border: 0; border-radius: 11px; font-size: 14px; }
 QLineEdit { background: #0e1c2e; color: #edf4ff; border: 1px solid #2a405c; border-radius: 13px; padding: 14px 18px; font-size: 18px; }
 QLineEdit:focus { border: 1px solid #3b8bff; }
 QScrollArea { border: 0; background: transparent; }

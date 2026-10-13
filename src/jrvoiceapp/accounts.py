@@ -14,6 +14,7 @@ from jrvoiceapp.models import (
     ConnectionKind,
     EmergencyConfig,
     SignalingTemplates,
+    SipTransport,
     UserEmergencySettings,
     WebRtcEngine,
 )
@@ -34,20 +35,41 @@ class AccountStore:
         if not self.path.exists():
             return []
         raw = json.loads(self.path.read_text(encoding="utf-8"))
-        return [
-            AccountConfig(
-                identifier=item["identifier"],
-                label=item["label"],
-                username=item["username"],
-                server=item["server"],
-                connection_kind=ConnectionKind(item["connection_kind"]),
-                web_rtc_engine=WebRtcEngine(item.get("web_rtc_engine", WebRtcEngine.SIPJS)),
-                voicemail_number=item.get("voicemail_number", "*97"),
-                signaling=SignalingTemplates(**item.get("signaling", {})),
-                emergency=EmergencyConfig(**item.get("emergency", {})),
-            )
-            for item in raw
-        ]
+        accounts = []
+        migrated = False
+        for item in raw:
+            try:
+                legacy_kind = item.get("connection_kind")
+                if legacy_kind == "SIP TLS":
+                    item = {
+                        **item,
+                        "connection_kind": ConnectionKind.SIP.value,
+                        "sip_transport": SipTransport.TLS.value,
+                    }
+                    migrated = True
+                accounts.append(
+                    AccountConfig(
+                        identifier=item["identifier"],
+                        label=item["label"],
+                        username=item["username"],
+                        server=item["server"],
+                        connection_kind=ConnectionKind(item["connection_kind"]),
+                        sip_transport=SipTransport(item.get("sip_transport", SipTransport.TLS)),
+                        web_rtc_engine=WebRtcEngine(item.get("web_rtc_engine", WebRtcEngine.SIPJS)),
+                        voicemail_number=item.get("voicemail_number", "*97"),
+                        signaling=SignalingTemplates(**item.get("signaling", {})),
+                        emergency=EmergencyConfig(**item.get("emergency", {})),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                # One malformed legacy entry must not make all accounts unusable.
+                continue
+        if migrated:
+            backup = self.path.with_suffix(self.path.suffix + ".pre-migration.bak")
+            if not backup.exists():
+                backup.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
+            self.save(accounts)
+        return accounts
 
     def save(self, accounts: list[AccountConfig]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

@@ -4,6 +4,7 @@ import time
 import struct
 import re
 import os
+from collections import deque
 from dataclasses import dataclass
 from typing import Any, List, Dict, Optional, Callable
 from jrvoiceapp.telephony.sipapp_core.secure_media import SRTPSessionPair, SecureMediaError
@@ -167,6 +168,8 @@ class AudioEngine:
         self._rtp_stats_lock = threading.Lock()
         self.rtp_packets_sent = 0
         self.rtp_packets_received = 0
+        self._tx_packet_times = deque()
+        self._rx_packet_times = deque()
         self.input_stream = None
         self.output_stream = None
         self.audio_error = ""
@@ -231,6 +234,7 @@ class AudioEngine:
         remote_port: int,
         on_audio_rx_callback: Optional[Callable] = None,
         bind_ip: str = "0.0.0.0",
+        advertised_ip: str = "",
         stun_server: str = "",
         symmetric_rtp: bool = False,
         srtp_outbound_key: bytes = b"",
@@ -242,7 +246,7 @@ class AudioEngine:
         self.remote_ip = remote_ip
         self.remote_port = remote_port
         self.bind_ip = bind_ip or "0.0.0.0"
-        self.advertised_ip = self.bind_ip
+        self.advertised_ip = advertised_ip or self.bind_ip
         self.advertised_port = 0
         self.symmetric_rtp = symmetric_rtp
         self.symmetric_source_learned = False
@@ -261,6 +265,8 @@ class AudioEngine:
         with self._rtp_stats_lock:
             self.rtp_packets_sent = 0
             self.rtp_packets_received = 0
+            self._tx_packet_times.clear()
+            self._rx_packet_times.clear()
         self.rtp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.rtp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
@@ -530,9 +536,16 @@ class AudioEngine:
     def get_rtp_stats(self) -> Dict[str, Any]:
         """Return an atomic snapshot of successfully sent/received RTP packets."""
         with self._rtp_stats_lock:
+            cutoff = time.monotonic() - 1.0
+            while self._tx_packet_times and self._tx_packet_times[0] < cutoff:
+                self._tx_packet_times.popleft()
+            while self._rx_packet_times and self._rx_packet_times[0] < cutoff:
+                self._rx_packet_times.popleft()
             return {
                 "packets_sent": self.rtp_packets_sent,
                 "packets_received": self.rtp_packets_received,
+                "packets_sent_per_second": len(self._tx_packet_times),
+                "packets_received_per_second": len(self._rx_packet_times),
                 "streaming": self.is_streaming,
                 "local_port": self.local_rtp_port,
                 "bind_ip": self.bind_ip,
@@ -659,10 +672,14 @@ class AudioEngine:
         while self.is_streaming and self.rtp_socket:
             try:
                 if not self.input_stream:
-                    time.sleep(0.1)
-                    continue
-                pcm, overflowed = self.input_stream.read(self.input_block_frames)
-                pcm_bytes = self._resample_pcm16(bytes(pcm), self.input_sample_rate, 8000, 160)
+                    # Keep RTP alive even when CoreAudio is unavailable.  This
+                    # opens NAT pinholes and makes the diagnostics distinguish
+                    # a device issue from a missing media path.
+                    pcm_bytes = b"\x00" * 320
+                    time.sleep(0.02)
+                else:
+                    pcm, _overflowed = self.input_stream.read(self.input_block_frames)
+                    pcm_bytes = self._resample_pcm16(bytes(pcm), self.input_sample_rate, 8000, 160)
                 pcm_bytes = self._apply_gain(pcm_bytes, self.mic_volume)
                 if self.muted:
                     pcm_bytes = b"\x00" * 320
@@ -682,7 +699,9 @@ class AudioEngine:
                     self.rtp_socket.sendto(rtp_packet, (self.remote_ip, self.remote_port))
                     with self._rtp_stats_lock:
                         self.rtp_packets_sent += 1
-            except Exception:
+                        self._tx_packet_times.append(time.monotonic())
+            except Exception as exc:
+                self.audio_error = f"RTP transmit stopped: {exc}"
                 break
 
     def _rx_loop(self, callback: Optional[Callable]):
@@ -707,6 +726,7 @@ class AudioEngine:
                         self.nat_status = f"Symmetric RTP learned {addr[0]}:{addr[1]}"
                     with self._rtp_stats_lock:
                         self.rtp_packets_received += 1
+                        self._rx_packet_times.append(time.monotonic())
                     csrc_count = data[0] & 0x0F
                     header_length = 12 + (csrc_count * 4)
                     if data[0] & 0x10 and len(data) >= header_length + 4:
@@ -742,7 +762,8 @@ class AudioEngine:
                         callback(payload, addr)
             except socket.timeout:
                 continue
-            except Exception:
+            except Exception as exc:
+                self.audio_error = f"RTP receive stopped: {exc}"
                 break
 
     def _deliver_rx_frames(self, frames: List[Optional[RTPAudioPacket]]) -> None:

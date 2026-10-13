@@ -6,8 +6,14 @@ from enum import StrEnum
 
 
 class ConnectionKind(StrEnum):
-    SIP = "SIP TLS"
+    SIP = "SIP"
     WEBRTC = "WebRTC WSS"
+
+
+class SipTransport(StrEnum):
+    UDP = "UDP"
+    TCP = "TCP"
+    TLS = "TLS"
 
 
 class WebRtcEngine(StrEnum):
@@ -80,6 +86,7 @@ class AccountConfig:
     server: str
     connection_kind: ConnectionKind
     web_rtc_engine: WebRtcEngine = WebRtcEngine.SIPJS
+    sip_transport: SipTransport = SipTransport.TLS
     voicemail_number: str = "*97"
     signaling: SignalingTemplates = field(default_factory=SignalingTemplates)
     emergency: EmergencyConfig = field(default_factory=EmergencyConfig)

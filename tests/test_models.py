@@ -1,3 +1,6 @@
+import json
+import time
+
 import pytest
 
 from jrvoiceapp.models import (
@@ -6,6 +9,7 @@ from jrvoiceapp.models import (
     ConnectionKind,
     EmergencyConfig,
     SignalingTemplates,
+    SipTransport,
     UserEmergencySettings,
     WebRtcEngine,
 )
@@ -19,6 +23,7 @@ from jrvoiceapp.provisioning import (
 from jrvoiceapp.records import CallRecord, Contact, RecordsStore
 from jrvoiceapp.telephony.controller import TelephonyController
 from jrvoiceapp.telephony.sipapp import SipAppProvider
+from jrvoiceapp.telephony.sipapp_core.audio_engine import AudioEngine
 from jrvoiceapp.telephony.sipapp_core.sip_engine import (
     DEFAULT_INVITE_TEMPLATE,
     SIPEngine,
@@ -29,7 +34,7 @@ from jrvoiceapp.telephony.webrtc_bridge import runtime_document
 
 
 def test_connection_labels_match_the_phone_ui() -> None:
-    assert ConnectionKind.SIP == "SIP TLS"
+    assert ConnectionKind.SIP == "SIP"
     assert ConnectionKind.WEBRTC == "WebRTC WSS"
 
 
@@ -69,6 +74,55 @@ def test_controller_selects_the_maintained_sipapp_provider() -> None:
     assert isinstance(provider, SipAppProvider)
     assert provider._profile()["domain"] == "pbx.example"
     assert provider._profile()["port"] == 5061
+
+
+def test_sip_profile_uses_selected_udp_transport_and_default_port() -> None:
+    account = AccountConfig(
+        "id", "Desk", "1001", "pbx.example", ConnectionKind.SIP, sip_transport=SipTransport.UDP
+    )
+    profile = SipAppProvider(account, "secret")._profile()
+    assert profile["transport"] == "UDP"
+    assert profile["port"] == 5060
+
+
+def test_legacy_tls_account_is_migrated_with_a_backup(tmp_path) -> None:
+    from jrvoiceapp.accounts import AccountStore
+
+    path = tmp_path / "accounts.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "identifier": "id",
+                    "label": "Desk",
+                    "username": "1001",
+                    "server": "pbx.test",
+                    "connection_kind": "SIP TLS",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    accounts = AccountStore(path).load()
+    assert accounts[0].connection_kind is ConnectionKind.SIP
+    assert accounts[0].sip_transport is SipTransport.TLS
+    assert path.with_suffix(".json.pre-migration.bak").exists()
+
+
+def test_audio_target_parses_the_peer_sdp_endpoint() -> None:
+    sdp = "v=0\r\nc=IN IP4 198.51.100.20\r\nm=audio 40002 RTP/AVP 0\r\n"
+    assert AudioEngine.parse_sdp_audio_target(sdp, "192.0.2.20") == ("198.51.100.20", 40002)
+
+
+def test_rtp_stats_include_live_packet_rates() -> None:
+    audio = AudioEngine()
+    now = time.monotonic()
+    with audio._rtp_stats_lock:
+        audio._tx_packet_times.extend((now - 0.2, now - 0.1))
+        audio._rx_packet_times.append(now - 0.1)
+    stats = audio.get_rtp_stats()
+    assert stats["packets_sent_per_second"] == 2
+    assert stats["packets_received_per_second"] == 1
 
 
 def test_sipapp_provider_never_puts_password_in_events() -> None:
@@ -154,11 +208,29 @@ def test_sipapp_diagnostics_redacts_credentials() -> None:
     account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
     provider = SipAppProvider(account, "do-not-expose")
     provider.engine = SIPEngine()
+    provider.engine.last_sip_peer = ("198.51.100.8", 5060, "UDP")
     provider.engine.log_sys_event("Registration ready")
     report = provider.diagnostics()
     assert report["transport"] == "UDP"
     assert "Registration ready" in report["events"][0]
     assert "do-not-expose" not in str(report)
+    assert report["signaling_destination"] == "198.51.100.8:5060 (UDP)"
+
+
+def test_sipapp_call_events_show_identity_without_sdp_or_password() -> None:
+    account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
+    provider = SipAppProvider(account, "do-not-expose")
+    provider.engine = SIPEngine()
+    provider.engine.outbound_invite_context = {
+        "invite_packet": "INVITE sip:1002@pbx.example SIP/2.0\r\n"
+        "From: <sip:1001@pbx.example>;tag=local\r\n\r\n"
+    }
+    events = []
+    provider.add_event_callback(lambda event, details: events.append((event, details)))
+    provider._on_call_state("CONNECTED", {"sdp": "a=crypto:secret", "password": "bad"})
+    assert events[-1][1]["from"] == "<sip:1001@pbx.example>;tag=local"
+    assert events[-1][1]["request_uri"] == "sip:1002@pbx.example"
+    assert "sdp" not in events[-1][1]
 
 
 def test_voiceadmin_profile_maps_to_a_sip_account_without_persisting_its_secret() -> None:

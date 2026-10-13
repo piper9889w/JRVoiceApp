@@ -22,6 +22,7 @@ from jrvoiceapp.models import (
     ConnectionKind,
     EmergencyConfig,
     SignalingTemplates,
+    SipTransport,
     UserEmergencySettings,
     WebRtcEngine,
 )
@@ -64,10 +65,13 @@ class AccountDialog(QDialog):
         self.voicemail_input = QLineEdit(account.voicemail_number if account else "*97")
         self.kind_select = QComboBox()
         self.kind_select.addItems([kind.value for kind in ConnectionKind])
+        self.transport_select = QComboBox()
+        self.transport_select.addItems([transport.value for transport in SipTransport])
         self.engine_select = QComboBox()
         self.engine_select.addItems([engine.value for engine in WebRtcEngine])
         if account:
             self.kind_select.setCurrentText(account.connection_kind.value)
+            self.transport_select.setCurrentText(account.sip_transport.value)
             self.engine_select.setCurrentText(account.web_rtc_engine.value)
         for title, control in (
             ("Account name", self.label_input),
@@ -75,6 +79,7 @@ class AccountDialog(QDialog):
             ("SIP server or WSS URL", self.server_input),
             ("Password", self.password_input),
             ("Connection", self.kind_select),
+            ("SIP transport", self.transport_select),
             ("WebRTC engine", self.engine_select),
             ("Voicemail number", self.voicemail_input),
         ):
@@ -106,7 +111,9 @@ class AccountDialog(QDialog):
         layout.addWidget(buttons)
 
     def _sync_engine_availability(self) -> None:
-        self.engine_select.setEnabled(self.kind_select.currentText() == ConnectionKind.WEBRTC.value)
+        is_sip = self.kind_select.currentText() == ConnectionKind.SIP.value
+        self.engine_select.setEnabled(not is_sip)
+        self.transport_select.setEnabled(is_sip)
 
     def _accept_if_valid(self) -> None:
         try:
@@ -123,6 +130,7 @@ class AccountDialog(QDialog):
             username=self.username_input.text().strip(),
             server=self.server_input.text().strip(),
             connection_kind=ConnectionKind(self.kind_select.currentText()),
+            sip_transport=SipTransport(self.transport_select.currentText()),
             web_rtc_engine=WebRtcEngine(self.engine_select.currentText()),
             voicemail_number=self.voicemail_input.text().strip() or "*97",
             signaling=self.signaling or SignalingTemplates(),
