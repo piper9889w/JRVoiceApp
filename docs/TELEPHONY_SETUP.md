@@ -45,6 +45,28 @@ NAT state, audio errors, last network error, and recent SIP event summaries.
 It intentionally displays no password, SIP authorization data, raw message
 body, or SDES key material.
 
+During a connected or held SIP call, the Active line refreshes every second.
+It shows the RURI, signaling destination, SDP-advertised RTP source and peer
+SDP RTP destination, the bound RTP socket, and live TX/s/RX/s alongside totals.
+The app binds the RTP socket to the exact local address and port advertised in
+SDP (unless a future explicit STUN mapping changes the advertised endpoint),
+so the diagnostics can flag an endpoint mismatch. These call-specific details
+are cleared as soon as the call terminates. RTP socket bind/start/close and
+send/receive failures are retained as redacted event summaries only; they
+never include credentials, SIP authorization headers, raw SDP, or SRTP keys.
+
+## UDP PBX media validation record
+
+For each inbound and outbound UDP test call, record: start/end time, RURI,
+signaling target, SDP local endpoint, bound endpoint, peer SDP endpoint,
+observed TX/s and RX/s while connected, NAT status, and two-way audio result.
+If RX/s remains zero, first compare the peer SDP `c=IN IP4` address and
+`m=audio` port with the displayed RTP destination; then verify the PBX can
+route to the advertised endpoint and inspect firewall/NAT policy. If the PBX
+sources RTP from an endpoint different from its SDP, enable and validate
+symmetric RTP deliberately. If the client is behind NAT, use a configured
+STUN mapping only after confirming the PBX can reach that mapping.
+
 ## Signaling templates and custom headers
 
 Each account has **Edit signaling templates…** in Account Settings. It stores

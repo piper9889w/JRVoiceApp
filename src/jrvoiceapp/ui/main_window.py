@@ -1,9 +1,10 @@
 """The desktop shell shown before protocol engines are connected."""
 
 from keyring.errors import KeyringError
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -31,8 +32,11 @@ from jrvoiceapp.ui.incoming_call import IncomingCallDialog
 
 
 class MainWindow(QMainWindow):
+    provider_event = Signal(str, object)
+
     def __init__(self) -> None:
         super().__init__()
+        self.provider_event.connect(self._on_provider_event)
         self.setWindowTitle("Global Voice")
         self.resize(1280, 790)
         self.setMinimumSize(780, 600)
@@ -46,6 +50,7 @@ class MainWindow(QMainWindow):
         self.controller = TelephonyController()
         self.provider = None
         self.active_call_details: dict[str, str] = {}
+        self.pending_dial_destination = ""
         self.dial_input = QLineEdit()
         self.dial_input.setAccessibleName("Dial a name or number")
         self.dial_input.setPlaceholderText("Name or number")
@@ -113,9 +118,9 @@ class MainWindow(QMainWindow):
         self.account_label = QLabel()
         self.account_label.setAccessibleName("Current account")
         layout.addWidget(self.account_label)
-        online = QLabel("     Online")
-        online.setObjectName("online")
-        layout.addWidget(online)
+        self.registration_status = QLabel()
+        self.registration_status.setAccessibleName("Registration status")
+        layout.addWidget(self.registration_status)
         layout.addSpacing(26)
 
         for label in ("☎  Phone", "♙  Contacts", "◷  Recent calls", "✉  Voicemail", "▤  Messages"):
@@ -142,6 +147,11 @@ class MainWindow(QMainWindow):
         diagnostics.clicked.connect(self.open_diagnostics)
         diagnostics.setAccessibleName("Call diagnostics")
         layout.addWidget(diagnostics)
+        self.register_button = QPushButton("↻  Register / retry")
+        self.register_button.setObjectName("nav")
+        self.register_button.setAccessibleName("Register or retry account")
+        self.register_button.clicked.connect(self.register_or_retry)
+        layout.addWidget(self.register_button)
         layout.addStretch()
 
         secure = QFrame()
@@ -170,9 +180,9 @@ class MainWindow(QMainWindow):
         heading = QLabel("Extension 1001")
         heading.setObjectName("heading")
         words.addWidget(heading)
-        online = QLabel("●  Online")
-        online.setObjectName("online")
-        words.addWidget(online)
+        self.identity_registration_status = QLabel()
+        self.identity_registration_status.setAccessibleName("Registration status")
+        words.addWidget(self.identity_registration_status)
         identity.addLayout(words)
         identity.addStretch()
         layout.addLayout(identity)
@@ -373,45 +383,103 @@ class MainWindow(QMainWindow):
     def _refresh_account_label(self) -> None:
         if self.accounts:
             account = self.accounts[0]
-            self.account_label.setText(f"●  {account.label}\n    {account.username}")
+            self.account_label.setText(f"{account.label}\n    {account.username}")
             if account.connection_kind.value == "SIP":
                 if account.sip_transport.value == "TLS":
-                    self.connection_security.setText("SIP signaling: TLS verified")
-                    self.connection_security.setObjectName("online")
+                    self.connection_security.setText("SIP signaling: TLS configured")
+                    self.connection_security.setObjectName("subtle")
                 else:
                     self.connection_security.setText(
                         f"SIP signaling: {account.sip_transport.value} (not encrypted)"
                     )
                     self.connection_security.setObjectName("subtle")
             else:
-                self.connection_security.setText("WebRTC signaling: WSS")
-                self.connection_security.setObjectName("online")
+                self.connection_security.setText("WebRTC signaling: WSS configured")
+                self.connection_security.setObjectName("subtle")
             self.connection_security.style().unpolish(self.connection_security)
             self.connection_security.style().polish(self.connection_security)
         else:
-            self.account_label.setText("●  No account configured")
+            self.account_label.setText("No account configured")
             self.connection_security.setText("No active account")
+        self._refresh_registration_status()
+
+    def _refresh_registration_status(self) -> None:
+        """Only call an account online after its provider confirms registration."""
+        if not self.accounts:
+            text, style = "○  No account configured", "subtle"
+        elif self.provider is None or self.provider.state.value == "idle":
+            text, style = "○  Not registered", "subtle"
+        elif self.provider.state.value == "registered":
+            text, style = "●  Online — registered", "online"
+        elif self.provider.state.value == "error":
+            text, style = "●  Registration failed — retry", "offline"
+        else:
+            text, style = "◌  Registering…", "subtle"
+        self.registration_status.setText(text)
+        self.registration_status.setObjectName(style)
+        self.identity_registration_status.setText(text)
+        self.identity_registration_status.setObjectName(style)
+        for label in (self.registration_status, self.identity_registration_status):
+            label.style().unpolish(label)
+            label.style().polish(label)
+
+    def _start_provider_for(self, destination: str = "") -> None:
+        account = self.controller.route_outbound(
+            self.accounts, destination, self.default_account_id
+        )
+        password = self.store.password_for(account.identifier)
+        self.provider = self.controller.provider_for(account, password)
+        if isinstance(self.provider, SipAppProvider):
+            self.provider.audio.input_device = self.audio_settings["input"]
+            self.provider.audio.output_device = self.audio_settings["output"]
+        # SIP registration runs on a worker; Qt queues this signal safely onto
+        # the window's UI thread before labels, dialogs, or history are changed.
+        self.provider.add_event_callback(
+            lambda event, details: self.provider_event.emit(event, details)
+        )
+        self.provider.start()
+
+    def register_or_retry(self) -> None:
+        if not self.accounts:
+            self.open_account_dialog()
+            return
+        try:
+            if self.provider is None:
+                self._start_provider_for()
+            elif isinstance(self.provider, SipAppProvider):
+                self.provider.retry_registration()
+            else:
+                self.provider.stop()
+                self.provider = None
+                self._start_provider_for()
+            self._refresh_registration_status()
+            self.statusBar().showMessage("Registration started.", 5000)
+        except (KeyringError, OSError, RuntimeError, ValueError) as error:
+            self._refresh_registration_status()
+            self.statusBar().showMessage(str(error), 8000)
 
     def place_call(self) -> None:
         if not self.accounts:
             self.open_account_dialog()
             return
         try:
+            started_now = False
             if self.provider is None:
-                account = self.controller.route_outbound(
-                    self.accounts, self.dial_input.text(), self.default_account_id
-                )
-                password = self.store.password_for(account.identifier)
-                self.provider = self.controller.provider_for(account, password)
-                if isinstance(self.provider, SipAppProvider):
-                    self.provider.audio.input_device = self.audio_settings["input"]
-                    self.provider.audio.output_device = self.audio_settings["output"]
-                self.provider.add_event_callback(self._on_provider_event)
-                self.provider.start()
+                self._start_provider_for(self.dial_input.text())
+                started_now = True
             if (
                 self._is_emergency_dial(self.dial_input.text())
                 and not self._confirm_emergency_location()
             ):
+                return
+            if self.provider.state.value != "registered":
+                self.pending_dial_destination = self.dial_input.text().strip()
+                if isinstance(self.provider, SipAppProvider) and not started_now:
+                    self.provider.retry_registration()
+                self._refresh_registration_status()
+                self.statusBar().showMessage(
+                    "Registering account; the call will start after registration succeeds.", 8000
+                )
                 return
             self.provider.dial(self.dial_input.text())
             self._record_call(self.dial_input.text(), "Outgoing", "Dialing")
@@ -488,8 +556,17 @@ class MainWindow(QMainWindow):
     def _on_provider_event(self, event: str, details: dict[str, str]) -> None:
         if event == "registration":
             self.statusBar().showMessage(details.get("detail", "SIP registration update"), 8000)
+            self._refresh_registration_status()
             if details.get("status") == "REGISTERED":
                 self._prompt_emergency_location_on_registration()
+                if self.pending_dial_destination and self.provider:
+                    destination = self.pending_dial_destination
+                    self.pending_dial_destination = ""
+                    try:
+                        self.provider.dial(destination)
+                        self._record_call(destination, "Outgoing", "Dialing")
+                    except (OSError, RuntimeError, ValueError) as error:
+                        self.statusBar().showMessage(str(error), 8000)
             return
         if event == "diagnostic":
             self.statusBar().showMessage(details.get("summary", "SIP diagnostic"), 5000)
@@ -539,9 +616,13 @@ class MainWindow(QMainWindow):
         signaling = report.get("signaling_destination", "—")
         packets = report.get("rtp_packets", "TX 0 / RX 0")
         packet_rate = report.get("rtp_packet_rate", "TX 0/s / RX 0/s")
-        rtp = report.get("rtp_remote", "—")
+        rtp_local = report.get("rtp_local", "—")
+        rtp_remote = report.get("rtp_remote", "—")
+        rtp_bound = report.get("rtp_bound", "—")
+        endpoint_match = report.get("rtp_endpoint_match", "—")
         self.active_line_status.setText(
-            f"{state}\nRURI: {destination}\nSignaling: {signaling}\nRTP: {rtp}\n"
+            f"{state}\nRURI: {destination}\nSignaling: {signaling}\n"
+            f"RTP: {rtp_local} → {rtp_remote}\nBound: {rtp_bound} (SDP match: {endpoint_match})\n"
             f"Packets: {packet_rate} ({packets})"
         )
 
@@ -687,21 +768,27 @@ class MainWindow(QMainWindow):
         self.raise_()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._quitting or not self.tray.isVisible():
-            event.accept()
-            return
-        event.ignore()
-        self.hide()
-        self.tray.showMessage(
-            "Global Voice",
-            "The phone is still running in the system tray.",
-            QSystemTrayIcon.MessageIcon.Information,
-            4000,
-        )
+        """Treat the window-manager X as a full, graceful application exit."""
+        self._shutdown()
+        event.accept()
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def quit_application(self) -> None:
-        if self.provider:
-            self.provider.stop()
-        self._quitting = True
-        self.tray.hide()
+        self._shutdown()
         self.close()
+
+    def _shutdown(self) -> None:
+        """Release phone resources exactly once before the process exits."""
+        if self._quitting:
+            return
+        self._quitting = True
+        self.active_line_timer.stop()
+        if self.provider:
+            try:
+                self.provider.stop()
+            except (OSError, RuntimeError):
+                # A shutdown must still complete if a peer has already gone away.
+                pass
+        self.tray.hide()

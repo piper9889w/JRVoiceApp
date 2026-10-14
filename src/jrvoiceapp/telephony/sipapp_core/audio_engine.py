@@ -166,6 +166,7 @@ class AudioEngine:
         self.mic_volume = 0.8
         self.speaker_volume = 0.8
         self._rtp_stats_lock = threading.Lock()
+        self._stream_stop_lock = threading.RLock()
         self.rtp_packets_sent = 0
         self.rtp_packets_received = 0
         self._tx_packet_times = deque()
@@ -179,6 +180,9 @@ class AudioEngine:
         self.output_sample_rate = 8000
         self.input_block_frames = 160
         self.audio_tap_callback: Optional[Callable[[str, bytes, int], None]] = None
+        # This callback carries only operational RTP facts (endpoints and error
+        # class/message).  It must never receive SDP, SIP messages, or keys.
+        self.diagnostic_callback: Optional[Callable[[str], None]] = None
         self.srtp: Optional[SRTPSessionPair] = None
         self.require_srtp = False
         self.srtp_errors = 0
@@ -191,6 +195,18 @@ class AudioEngine:
     def set_audio_tap(self, callback: Optional[Callable[[str, bytes, int], None]]) -> None:
         """Receive decoded 8 kHz PCM16 audio for recording (TX and RX)."""
         self.audio_tap_callback = callback
+
+    def set_diagnostic_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """Receive safe RTP socket lifecycle and media-failure summaries."""
+        self.diagnostic_callback = callback
+
+    def _diagnostic(self, summary: str) -> None:
+        if self.diagnostic_callback:
+            try:
+                self.diagnostic_callback(summary)
+            except Exception:
+                # Diagnostics must never interrupt the call media threads.
+                pass
 
     @staticmethod
     def get_audio_devices() -> Dict[str, Any]:
@@ -276,17 +292,24 @@ class AudioEngine:
                 self.rtp_socket.bind((self.bind_ip, attempt_port))
                 bound_port = attempt_port
                 break
-            except Exception:
+            except OSError:
                 continue
         if not bound_port:
             self.is_streaming = False
             self.rtp_socket.close()
             self.rtp_socket = None
+            self._diagnostic(
+                f"RTP socket bind failed for {self.bind_ip} ports {local_port}-{local_port + 48}"
+            )
             raise OSError(
                 f"Could not bind a UDP RTP socket on ports {local_port}-{local_port + 48}"
             )
         self.local_rtp_port = bound_port
         self.advertised_port = bound_port
+        self._diagnostic(
+            f"RTP socket bound {self.bind_ip}:{bound_port}; SDP advertises "
+            f"{self.advertised_ip}:{self.advertised_port}"
+        )
         if stun_server:
             mapped = self._discover_stun_mapping(stun_server)
             if mapped:
@@ -296,39 +319,60 @@ class AudioEngine:
                 self.nat_status = f"STUN failed ({stun_server}); using local address"
         self._open_audio_streams()
 
-        self.rtp_thread = threading.Thread(target=self._tx_loop, daemon=True)
+        # These must not be daemon threads: Python must never finalize the
+        # sounddevice CFFI runtime while an audio read/write is still active.
+        self.rtp_thread = threading.Thread(target=self._tx_loop, name="JRVoice RTP transmit")
         self.rx_thread = threading.Thread(
-            target=self._rx_loop, args=(on_audio_rx_callback,), daemon=True
+            target=self._rx_loop, args=(on_audio_rx_callback,), name="JRVoice RTP receive"
         )
         self.rtp_thread.start()
         self.rx_thread.start()
-
-        print(
-            f"[AudioEngine] RTP stream active on {self.bind_ip}:{bound_port} -> {remote_ip}:{remote_port}"
+        self._diagnostic(
+            f"RTP stream started {self.bind_ip}:{bound_port} -> {remote_ip or 'pending'}:{remote_port}"
         )
         return self.advertised_port
 
     def stop_rtp_stream(self):
-        """Stop active RTP audio stream."""
-        self.is_streaming = False
-        self._deliver_rx_frames(self.jitter_buffer.flush())
-        self.srtp = None
-        self.require_srtp = False
-        for stream_name in ("input_stream", "output_stream"):
-            stream = getattr(self, stream_name)
-            if stream:
+        """Stop RTP workers before releasing PortAudio's native stream handles."""
+        with self._stream_stop_lock:
+            self.is_streaming = False
+            if self.rtp_socket:
                 try:
-                    stream.stop()
-                    stream.close()
+                    self.rtp_socket.close()
                 except Exception:
                     pass
-                setattr(self, stream_name, None)
-        if self.rtp_socket:
-            try:
-                self.rtp_socket.close()
-            except Exception:
-                pass
-            self.rtp_socket = None
+                self.rtp_socket = None
+                self._diagnostic("RTP socket closed")
+
+            # Abort unblocks a PortAudio read/write immediately.  The worker
+            # must leave the CFFI call before Python or the stream is finalized.
+            for stream_name in ("input_stream", "output_stream"):
+                stream = getattr(self, stream_name)
+                if stream:
+                    try:
+                        stream.abort()
+                    except Exception:
+                        pass
+            current_thread = threading.current_thread()
+            for worker in (self.rtp_thread, self.rx_thread):
+                if worker and worker is not current_thread and worker.is_alive():
+                    worker.join(timeout=2.0)
+                    if worker.is_alive():
+                        self._diagnostic("RTP worker did not stop within 2 seconds")
+
+            self._deliver_rx_frames(self.jitter_buffer.flush())
+            self.srtp = None
+            self.require_srtp = False
+            for stream_name in ("input_stream", "output_stream"):
+                stream = getattr(self, stream_name)
+                if stream:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+                    setattr(self, stream_name, None)
+            self.rtp_thread = None
+            self.rx_thread = None
 
     @staticmethod
     def _device_id(selection: str) -> Optional[int]:
@@ -468,6 +512,7 @@ class AudioEngine:
             self.remote_ip = remote_ip
         if remote_port > 0:
             self.remote_port = remote_port
+        self._diagnostic(f"RTP peer set from SDP to {self.remote_ip}:{self.remote_port}")
 
     def _configured_codecs(self) -> List[str]:
         codecs = []
@@ -549,8 +594,14 @@ class AudioEngine:
                 "streaming": self.is_streaming,
                 "local_port": self.local_rtp_port,
                 "bind_ip": self.bind_ip,
+                "bound_endpoint": f"{self.bind_ip}:{self.local_rtp_port}",
                 "advertised_ip": self.advertised_ip,
                 "advertised_port": self.advertised_port,
+                "advertised_endpoint": f"{self.advertised_ip}:{self.advertised_port}",
+                "advertised_matches_bound": (
+                    self.advertised_ip == self.bind_ip
+                    and self.advertised_port == self.local_rtp_port
+                ),
                 "remote_ip": self.remote_ip,
                 "remote_port": self.remote_port,
                 "nat_status": self.nat_status,
@@ -671,14 +722,15 @@ class AudioEngine:
         """Audio transmission loop."""
         while self.is_streaming and self.rtp_socket:
             try:
-                if not self.input_stream:
+                input_stream = self.input_stream
+                if not input_stream:
                     # Keep RTP alive even when CoreAudio is unavailable.  This
                     # opens NAT pinholes and makes the diagnostics distinguish
                     # a device issue from a missing media path.
                     pcm_bytes = b"\x00" * 320
                     time.sleep(0.02)
                 else:
-                    pcm, _overflowed = self.input_stream.read(self.input_block_frames)
+                    pcm, _overflowed = input_stream.read(self.input_block_frames)
                     pcm_bytes = self._resample_pcm16(bytes(pcm), self.input_sample_rate, 8000, 160)
                 pcm_bytes = self._apply_gain(pcm_bytes, self.mic_volume)
                 if self.muted:
@@ -701,7 +753,9 @@ class AudioEngine:
                         self.rtp_packets_sent += 1
                         self._tx_packet_times.append(time.monotonic())
             except Exception as exc:
-                self.audio_error = f"RTP transmit stopped: {exc}"
+                if self.is_streaming:
+                    self.audio_error = f"RTP transmit stopped: {exc}"
+                    self._diagnostic(f"RTP transmit stopped ({type(exc).__name__}): {exc}")
                 break
 
     def _rx_loop(self, callback: Optional[Callable]):
@@ -763,7 +817,9 @@ class AudioEngine:
             except socket.timeout:
                 continue
             except Exception as exc:
-                self.audio_error = f"RTP receive stopped: {exc}"
+                if self.is_streaming:
+                    self.audio_error = f"RTP receive stopped: {exc}"
+                    self._diagnostic(f"RTP receive stopped ({type(exc).__name__}): {exc}")
                 break
 
     def _deliver_rx_frames(self, frames: List[Optional[RTPAudioPacket]]) -> None:
@@ -776,6 +832,7 @@ class AudioEngine:
                 self.audio_tap_callback("rx", ready_pcm, self._rx_media_frame)
             self._rx_media_frame += 1
             if self.output_stream:
-                self.output_stream.write(
+                output_stream = self.output_stream
+                output_stream.write(
                     self._resample_pcm16(ready_pcm, 8000, self.output_sample_rate)
                 )

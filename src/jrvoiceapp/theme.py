@@ -10,6 +10,7 @@ QLabel#brandAccent { color: #2c83ff; font-size: 28px; font-weight: 700; }
 QLabel#heading { font-size: 28px; font-weight: 700; }
 QLabel#subtle { color: #9baeca; }
 QLabel#online { color: #4ce29a; font-weight: 600; }
+QLabel#offline { color: #ff718d; font-weight: 600; }
 QLabel#section { font-size: 18px; font-weight: 700; }
 QPushButton { color: #dbe8fb; background: #15243a; border: 1px solid #29415d; border-radius: 11px; padding: 10px 14px; }
 QPushButton:hover { background: #203655; }

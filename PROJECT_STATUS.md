@@ -1,6 +1,6 @@
 # JRVoiceApp project status
 
-Last updated: 2026-10-12
+Last updated: 2026-10-14
 
 This is the shared working checklist for the project. Update it in the same pull request or commit as the work it describes. Use `[x]` only for work that has been implemented and verified; use `[~]` for active work; use `[ ]` for planned work.
 
@@ -10,7 +10,7 @@ This is the shared working checklist for the project. Update it in the same pull
 | --- | --- | --- |
 | Project foundation | Complete | Python package, documentation, license, lint/test workflow, and packaging baseline. |
 | Desktop interface | Complete | Mockup-inspired responsive dark phone window with accessible controls, dialer, connection status, recents, and call controls. |
-| SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; provider registration, call-state, RTP/G.711 audio, UI/tray events, and non-secret diagnostics are integrated but not live-PBX verified. |
+| SIP calling | In progress; live validation pending | SIPApp source is maintained in-tree; registration/retry UI, call-state, RTP/G.711 audio, endpoint/rate diagnostics, safe audio shutdown, and non-secret diagnostics are integrated but not live-PBX verified. |
 | WebRTC calling | In progress; live validation pending | SIP.js/JsSIP provider boundary, embedded WebEngine runtime loader, and secure-WSS validation are implemented; real WSS/TURN registration and media remain unverified. |
 | Tray and incoming calls | Complete foundation | Minimize-to-tray, restore, native notification, and actionable demo incoming-call prompt. |
 | Accounts and secure configuration | Complete foundation | Account editor, OS-keychain password/provisioning-secret boundary, VoiceAdmin profile refresh, SIP transport selection, and legacy-account migration with pre-migration backup. |

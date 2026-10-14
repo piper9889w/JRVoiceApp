@@ -14,8 +14,14 @@ def main() -> int:
     app.setOrganizationName("Global Voice")
     app.setStyleSheet(APP_STYLE)
     window = MainWindow()
+    # Handles menu exits and OS/application-level quit paths in addition to
+    # the main window's close button.
+    app.aboutToQuit.connect(window._shutdown)
     window.show()
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        window._shutdown()
 
 
 if __name__ == "__main__":

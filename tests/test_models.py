@@ -125,6 +125,54 @@ def test_rtp_stats_include_live_packet_rates() -> None:
     assert stats["packets_received_per_second"] == 1
 
 
+def test_rtp_diagnostics_prove_the_sdp_endpoint_is_the_bound_socket() -> None:
+    audio = AudioEngine()
+    audio.bind_ip = "192.0.2.10"
+    audio.local_rtp_port = 10000
+    audio.advertised_ip = "192.0.2.10"
+    audio.advertised_port = 10000
+    stats = audio.get_rtp_stats()
+    assert stats["bound_endpoint"] == "192.0.2.10:10000"
+    assert stats["advertised_endpoint"] == "192.0.2.10:10000"
+    assert stats["advertised_matches_bound"] is True
+
+
+def test_sipapp_audio_lifecycle_diagnostics_are_safe() -> None:
+    account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
+    provider = SipAppProvider(account, "do-not-expose")
+    events = []
+    provider.add_event_callback(lambda event, details: events.append((event, details)))
+    provider._on_audio_diagnostic("RTP socket bound 192.0.2.10:10000")
+    assert events[-1] == (
+        "diagnostic",
+        {"category": "RTP", "level": "INFO", "summary": "RTP socket bound 192.0.2.10:10000"},
+    )
+    assert "do-not-expose" not in str(events)
+
+
+def test_audio_stop_aborts_native_streams_before_closing_them() -> None:
+    class FakeStream:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def abort(self) -> None:
+            self.calls.append("abort")
+
+        def close(self) -> None:
+            self.calls.append("close")
+
+    audio = AudioEngine()
+    input_stream = FakeStream()
+    output_stream = FakeStream()
+    audio.input_stream = input_stream
+    audio.output_stream = output_stream
+    audio.stop_rtp_stream()
+    assert input_stream.calls == ["abort", "close"]
+    assert output_stream.calls == ["abort", "close"]
+    assert audio.input_stream is None
+    assert audio.output_stream is None
+
+
 def test_sipapp_provider_never_puts_password_in_events() -> None:
     account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
     provider = SipAppProvider(account, "do-not-expose")
@@ -132,6 +180,24 @@ def test_sipapp_provider_never_puts_password_in_events() -> None:
     provider.add_event_callback(lambda event, details: events.append((event, details)))
     provider._on_call_state("DIALING", {"password": "do-not-expose", "target": "1002"})
     assert events == [("call-state", {"state": "DIALING", "target": "1002"})]
+
+
+def test_sipapp_retry_registration_reuses_the_existing_provider() -> None:
+    account = AccountConfig("id", "Desk", "1001", "pbx.example", ConnectionKind.SIP)
+    provider = SipAppProvider(account, "do-not-expose")
+
+    class Registration:
+        profile = None
+
+        def register_account(self, profile: dict[str, object]) -> None:
+            self.profile = profile
+
+    registration = Registration()
+    provider.registration = registration
+    provider.retry_registration()
+    assert provider.state.value == "ready"
+    assert registration.profile is not None
+    assert registration.profile["username"] == "1001"
 
 
 def test_sipapp_template_renders_custom_header_variables() -> None:

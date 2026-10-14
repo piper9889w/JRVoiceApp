@@ -29,6 +29,7 @@ class SipAppProvider(TelephonyProvider):
         self.engine: SIPEngine | None = None
         self.registration: RegistrationManager | None = None
         self.audio = AudioEngine()
+        self.audio.set_diagnostic_callback(self._on_audio_diagnostic)
         self.emergency_location = ""
         self.pidf_lo_body = ""
         self.geolocation_header = ""
@@ -87,7 +88,7 @@ class SipAppProvider(TelephonyProvider):
         profile = self._profile()
         # Bind before creating the SDP offer.  Advertising a port before it is
         # listening produces a connected SIP dialog with no RTP on many PBXs.
-        self._prepare_audio()
+        self._prepare_audio(str(profile["domain"]), fallback_port=int(profile["port"]))
         target = self.engine.normalize_dial_target(destination, str(profile["domain"]))
         self.engine.start_outbound_invite(
             target,
@@ -100,12 +101,24 @@ class SipAppProvider(TelephonyProvider):
             media_ip=self.audio.advertised_ip,
         )
 
+    def retry_registration(self) -> None:
+        """Start a new REGISTER transaction without recreating account data."""
+        if not self.registration:
+            self.start()
+            return
+        self.state = ProviderState.READY
+        self.registration.register_account(self._profile())
+
     def answer(self) -> None:
         if not self.engine:
             raise RuntimeError("SIPApp is not running.")
         dialog = self.engine.active_dialog
         offer = dialog.get("req_msg").body if dialog.get("req_msg") else ""
-        self._prepare_audio(offer, str(dialog.get("remote_ip", "")))
+        self._prepare_audio(
+            offer,
+            str(dialog.get("remote_ip", "")),
+            int(dialog.get("remote_port", 0) or 0),
+        )
         self.engine.answer_incoming_call(
             rtp_port=self.audio.local_rtp_port,
             media_ip=self.audio.advertised_ip,
@@ -173,6 +186,8 @@ class SipAppProvider(TelephonyProvider):
             "codec": self.audio.negotiated_codec,
             "media_security": stats["media_security"],
             "rtp_local": f"{stats['advertised_ip']}:{stats['advertised_port']}",
+            "rtp_bound": str(stats["bound_endpoint"]),
+            "rtp_endpoint_match": "yes" if stats["advertised_matches_bound"] else "no",
             "rtp_remote": f"{stats['remote_ip']}:{stats['remote_port']}",
             "rtp_packets": f"TX {stats['packets_sent']} / RX {stats['packets_received']}",
             "rtp_packet_rate": (
@@ -229,6 +244,13 @@ class SipAppProvider(TelephonyProvider):
             "diagnostic", category=entry.category, level=entry.direction, summary=entry.summary
         )
 
+    def _on_audio_diagnostic(self, summary: str) -> None:
+        """Expose only redacted RTP lifecycle details to the safe event feed."""
+        if self.engine:
+            self.engine.log_sys_event(summary, category="RTP")
+        else:
+            self._emit("diagnostic", category="RTP", level="INFO", summary=summary)
+
     def _start_audio(self, sdp: str, fallback_ip: str) -> None:
         """Use SIPApp's RTP/G.711 engine after a successful SDP negotiation."""
         if not sdp:
@@ -241,11 +263,13 @@ class SipAppProvider(TelephonyProvider):
             if self.audio.is_streaming:
                 self.audio.set_remote_rtp_target(remote_ip, remote_port)
             else:
+                local_ip = self._media_local_ip(fallback_ip)
                 self.audio.start_rtp_stream(
                     10000,
                     remote_ip,
                     remote_port,
-                    advertised_ip=self.engine.local_ip if self.engine else "",
+                    bind_ip=local_ip,
+                    advertised_ip=local_ip,
                 )
             self._emit(
                 "media",
@@ -256,7 +280,9 @@ class SipAppProvider(TelephonyProvider):
         except (OSError, ValueError) as error:
             self._emit("media-error", detail=str(error))
 
-    def _prepare_audio(self, offer_sdp: str = "", fallback_ip: str = "") -> None:
+    def _prepare_audio(
+        self, offer_sdp: str = "", fallback_ip: str = "", fallback_port: int = 0
+    ) -> None:
         """Bind the local RTP endpoint before it is placed in SDP."""
         if self.audio.is_streaming:
             return
@@ -267,5 +293,17 @@ class SipAppProvider(TelephonyProvider):
             remote_ip, remote_port = self.audio.parse_sdp_audio_target(offer_sdp, fallback_ip)
             if not remote_ip or not remote_port:
                 raise ValueError("Peer SDP has no usable IPv4 RTP address and port.")
-        advertised_ip = self.engine.local_ip if self.engine else ""
-        self.audio.start_rtp_stream(10000, remote_ip, remote_port, advertised_ip=advertised_ip)
+        local_ip = self._media_local_ip(fallback_ip, fallback_port)
+        self.audio.start_rtp_stream(
+            10000,
+            remote_ip,
+            remote_port,
+            bind_ip=local_ip,
+            advertised_ip=local_ip,
+        )
+
+    def _media_local_ip(self, route_host: str = "", route_port: int = 0) -> str:
+        """Choose the interface the PBX route uses before placing it in SDP."""
+        if self.engine and route_host:
+            return self.engine.get_local_ip_for_target(route_host, route_port or 5060)
+        return self.engine.local_ip if self.engine else "127.0.0.1"
